@@ -10,8 +10,16 @@ export class WebRTCManager {
         this.config = {
             iceServers: [
                 { urls: 'stun:stun.l.google.com:19302' },
-                { urls: 'stun:stun1.l.google.com:19302' }
-            ]
+                { urls: 'stun:stun1.l.google.com:19302' },
+                { urls: 'stun:stun2.l.google.com:19302' },
+                { urls: 'stun:stun3.l.google.com:19302' },
+                { urls: 'stun:stun4.l.google.com:19302' },
+                // Additional STUN servers for better connectivity
+                { urls: 'stun:stun.stunprotocol.org:3478' },
+                { urls: 'stun:stun.voiparound.com' },
+                { urls: 'stun:stun.voipbuster.com' }
+            ],
+            iceCandidatePoolSize: 10
         };
     }
 
@@ -179,12 +187,22 @@ export class WebRTCManager {
      */
     async addIceCandidate(peerId, candidate) {
         const peer = this.peers.get(peerId);
-        if (!peer) return;
+        if (!peer || !peer.pc) return;
 
         try {
-            await peer.pc.addIceCandidate(new RTCIceCandidate(candidate));
+            // If candidate is already a plain object, use it directly
+            // Otherwise wrap it
+            if (candidate.candidate) {
+                await peer.pc.addIceCandidate(new RTCIceCandidate(candidate));
+            } else {
+                // Handle case where candidate might already be an RTCIceCandidate
+                await peer.pc.addIceCandidate(candidate);
+            }
         } catch (error) {
-            console.error('Error adding ICE candidate:', error);
+            // Ignore errors for invalid/duplicate candidates
+            if (error.name !== 'OperationError' && error.name !== 'InvalidStateError') {
+                console.error('Error adding ICE candidate:', error);
+            }
         }
     }
 

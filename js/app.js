@@ -133,7 +133,14 @@ class WispherGrid {
 
         this.webrtc.onIceCandidate = (peerId, candidate) => {
             if (candidate) {
-                this.room.sendSignal(peerId, 'ice-candidate', candidate);
+                // Serialize ICE candidate to plain object (can't clone RTCIceCandidate directly)
+                const candidateData = {
+                    candidate: candidate.candidate,
+                    sdpMLineIndex: candidate.sdpMLineIndex,
+                    sdpMid: candidate.sdpMid,
+                    usernameFragment: candidate.usernameFragment
+                };
+                this.room.sendSignal(peerId, 'ice-candidate', candidateData);
             }
         };
     }

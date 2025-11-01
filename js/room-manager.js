@@ -94,8 +94,12 @@ export class RoomManager {
                     case 'ice-candidate':
                         onSignal?.(from, type, data);
                         break;
+                    case 'ping':
+                        // Ignore ping messages (used for presence)
+                        break;
                     default:
-                        console.warn('Unknown signaling message type:', type);
+                        // Silently ignore unknown types to avoid console spam
+                        break;
                 }
             };
 

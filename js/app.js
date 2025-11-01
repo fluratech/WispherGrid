@@ -14,6 +14,8 @@ class WispherGrid {
         this.ui = new UIManager();
         this.username = '';
         this.connectedPeers = new Map(); // peerId -> { username, connectedAt }
+        this.pendingFiles = new Map(); // fileId -> { fileName, fileSize, chunks }
+        this.receivingFiles = new Map(); // fileId -> { fileName, fileSize, chunks, from }
         
         this.initialize();
     }
@@ -415,6 +417,7 @@ class WispherGrid {
                 false
             );
         } else if (message.type === 'file') {
+            // Small file sent directly
             const peerInfo = this.connectedPeers.get(peerId);
             this.handleFileReceived(
                 message.username || peerInfo?.username || 'Unknown',
@@ -423,6 +426,41 @@ class WispherGrid {
                 message.fileData,
                 message.timestamp || Date.now()
             );
+        } else if (message.type === 'file-start') {
+            // Start receiving large file
+            this.receivingFiles.set(message.fileId, {
+                fileName: message.fileName,
+                fileSize: message.fileSize,
+                totalChunks: message.totalChunks,
+                chunks: new Array(message.totalChunks).fill(null),
+                username: message.username,
+                timestamp: message.timestamp,
+                peerId: peerId
+            });
+            this.ui.showToast(`Receiving ${message.fileName}...`, 'info');
+        } else if (message.type === 'file-chunk') {
+            // Receive file chunk
+            const fileInfo = this.receivingFiles.get(message.fileId);
+            if (fileInfo) {
+                fileInfo.chunks[message.chunkIndex] = message.chunkData;
+                
+                // Check if all chunks received
+                const allReceived = fileInfo.chunks.every(chunk => chunk !== null);
+                if (allReceived || message.isLast) {
+                    const fileData = fileInfo.chunks.join('');
+                    this.receivingFiles.delete(message.fileId);
+                    
+                    this.handleFileReceived(
+                        fileInfo.username,
+                        fileInfo.fileName,
+                        fileInfo.fileSize,
+                        fileData,
+                        fileInfo.timestamp
+                    );
+                    
+                    this.ui.showToast(`Received ${fileInfo.fileName}`, 'success');
+                }
+            }
         }
     }
 
@@ -430,39 +468,120 @@ class WispherGrid {
      * Handle file selected for sharing
      */
     async handleFileSelected(file) {
-        if (file.size > 100 * 1024 * 1024) { // 100MB limit
-            this.ui.showToast('File too large (max 100MB)', 'error');
+        // Increase limit to 50MB for data channel compatibility
+        if (file.size > 50 * 1024 * 1024) {
+            this.ui.showToast('File too large (max 50MB)', 'error');
             return;
         }
 
         try {
+            this.ui.showToast(`Sending ${file.name}...`, 'info');
+            
             const fileData = await this.readFileAsBase64(file);
-            const fileMessage = {
-                type: 'file',
-                username: this.username,
-                fileName: file.name,
-                fileSize: file.size,
-                fileData: fileData,
-                timestamp: Date.now()
-            };
+            
+            // For files larger than 500KB, use chunking
+            const CHUNK_SIZE = 64 * 1024; // 64KB chunks (safe for all browsers)
+            
+            if (file.size > 500 * 1024) {
+                // Send file in chunks
+                await this.sendFileInChunks(file.name, file.size, fileData, fileData.length);
+            } else {
+                // Send small file directly
+                const fileMessage = {
+                    type: 'file',
+                    username: this.username,
+                    fileName: file.name,
+                    fileSize: file.size,
+                    fileData: fileData,
+                    timestamp: Date.now()
+                };
 
-            // Broadcast to all peers
-            this.webrtc.broadcastMessage(fileMessage);
+                // Broadcast to all peers
+                this.webrtc.broadcastMessage(fileMessage);
 
-            // Display own file message
-            this.ui.displayFileMessage(
-                this.username,
-                file.name,
-                file.size,
-                fileData,
-                Date.now(),
-                true,
-                (fileName, data) => this.downloadFile(fileName, data)
-            );
+                // Display own file message
+                this.ui.displayFileMessage(
+                    this.username,
+                    file.name,
+                    file.size,
+                    fileData,
+                    Date.now(),
+                    true,
+                    (fileName, data) => this.downloadFile(fileName, data)
+                );
+                
+                this.ui.showToast('File sent', 'success');
+            }
         } catch (error) {
             console.error('Error reading file:', error);
             this.ui.showToast('Error reading file', 'error');
         }
+    }
+
+    /**
+     * Send large file in chunks
+     */
+    async sendFileInChunks(fileName, fileSize, fileData, dataLength) {
+        const CHUNK_SIZE = 64 * 1024; // 64KB chunks
+        const totalChunks = Math.ceil(dataLength / CHUNK_SIZE);
+        const fileId = `${Date.now()}-${Math.random().toString(36).substring(7)}`;
+        
+        // Send file header
+        const headerMessage = {
+            type: 'file-start',
+            username: this.username,
+            fileName: fileName,
+            fileSize: fileSize,
+            fileId: fileId,
+            totalChunks: totalChunks,
+            timestamp: Date.now()
+        };
+        
+        this.webrtc.broadcastMessage(headerMessage);
+        
+        // Send chunks
+        for (let i = 0; i < totalChunks; i++) {
+            const start = i * CHUNK_SIZE;
+            const end = Math.min(start + CHUNK_SIZE, dataLength);
+            const chunk = fileData.substring(start, end);
+            
+            const chunkMessage = {
+                type: 'file-chunk',
+                fileId: fileId,
+                chunkIndex: i,
+                chunkData: chunk,
+                isLast: i === totalChunks - 1
+            };
+            
+            this.webrtc.broadcastMessage(chunkMessage);
+            
+            // Small delay to avoid overwhelming the channel
+            if (i < totalChunks - 1) {
+                await new Promise(resolve => setTimeout(resolve, 10));
+            }
+        }
+        
+        // Store file data for display
+        this.pendingFiles = this.pendingFiles || new Map();
+        this.pendingFiles.set(fileId, {
+            fileName,
+            fileSize,
+            fileData,
+            timestamp: Date.now()
+        });
+        
+        // Display own file message
+        this.ui.displayFileMessage(
+            this.username,
+            fileName,
+            fileSize,
+            fileData,
+            Date.now(),
+            true,
+            (name, data) => this.downloadFile(name, data)
+        );
+        
+        this.ui.showToast('File sent', 'success');
     }
 
     /**

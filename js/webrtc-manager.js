@@ -114,7 +114,11 @@ export class WebRTCManager {
         // Create data channel for messaging (only if initiator)
         let dataChannel = null;
         if (isInitiator) {
-            dataChannel = pc.createDataChannel('messages', { ordered: true });
+            // Create with higher buffer size for file transfers
+            dataChannel = pc.createDataChannel('messages', { 
+                ordered: true,
+                maxRetransmits: 3
+            });
             this.setupDataChannel(peerId, dataChannel);
         } else {
             // Wait for data channel from remote peer

@@ -17,10 +17,21 @@ A peer-to-peer communication application using WebRTC without centralized server
 WispherGrid uses WebRTC (Web Real-Time Communication) to establish direct connections between peers:
 
 1. **Room-Based**: Users join rooms by name
-2. **Peer Discovery**: Uses BroadcastChannel API for signaling (same-origin)
+2. **Signaling**: WebSocket server for cross-device support (or BroadcastChannel for same-device)
 3. **WebRTC Connections**: Direct peer-to-peer connections for media and data
-4. **Data Channels**: Text messages sent via reliable data channels
+4. **Data Channels**: Text messages and files sent via reliable data channels
 5. **Media Streams**: Video and audio streams shared directly between peers
+
+### ⚠️ Important: Cross-Device Support
+
+For cross-device connections (phone ↔ laptop, etc.), you need to run the signaling server:
+
+```bash
+npm install
+npm run signaling
+```
+
+See [SIGNALING_SETUP.md](SIGNALING_SETUP.md) for detailed setup instructions.
 
 ## Getting Started
 

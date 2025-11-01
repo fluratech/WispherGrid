@@ -1,0 +1,1165 @@
+<!DOCTYPE html>
+<html lang="en" class="h-full">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>P2P Chat Client (V5.1) - Fixed Layout</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Use Socket.IO 4.7.5 client -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.7.5/socket.io.min.js"></script>
+    <style>
+        /* Updated Theme */
+        body { font-family: 'Inter', sans-serif; }
+        .self { background-color: #DBEAFE; color: #1F2937; } /* bg-blue-100 */
+        .peer { background-color: #e5e7eb; color: #1f2937; } /* bg-gray-200 */
+        .system { background-color: #f3f4f6; color: #374151; } /* bg-gray-100 */
+
+        #messages::-webkit-scrollbar, #user-list::-webkit-scrollbar, #search-results::-webkit-scrollbar { width: 6px; }
+        #messages::-webkit-scrollbar-track, #user-list::-webkit-scrollbar-track, #search-results::-webkit-scrollbar-track { background: transparent; }
+        #messages::-webkit-scrollbar-thumb, #user-list::-webkit-scrollbar-thumb, #search-results::-webkit-scrollbar-thumb { background-color: #888; border-radius: 20px; }
+        
+        /* Style for audio player in chat */
+        .chat-audio { width: 250px; }
+        .self .chat-audio { filter: sepia(30%) saturate(70%) hue-rotate(180deg) brightness(100%) contrast(90%); }
+    </style>
+</head>
+<body class="bg-gray-100 text-gray-900 h-full flex items-center justify-center p-4">
+
+    <!-- Login Modal -->
+    <div id="username-modal" class="fixed inset-0 bg-gray-900 bg-opacity-75 flex items-center justify-center z-50">
+        <div class="bg-white rounded-lg shadow-xl p-6 max-w-sm w-full">
+            <h3 class="text-xl font-bold text-center mb-4">Choose your Username</h3>
+            <form id="login-form">
+                <input type="text" id="username-input" placeholder="Enter your name..." required
+                       class="w-full px-4 py-2 border border-gray-300 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-blue-500">
+                <p id="login-error" class="text-red-500 text-sm mt-2 h-4"></p>
+                <button id="login-btn" type="submit" class="w-full bg-blue-500 hover:bg-blue-600 text-white font-bold py-2 px-4 rounded-lg mt-4">
+                    Join Chat
+                </button>
+            </form>
+        </div>
+    </div>
+
+    <!-- Search Modal -->
+    <div id="search-modal" class="fixed inset-0 bg-gray-900 bg-opacity-75 flex items-center justify-center z-40 hidden">
+        <div class="bg-white rounded-lg shadow-xl p-6 max-w-sm w-full h-[70vh] flex flex-col">
+            <div class="flex justify-between items-center mb-4">
+                <h3 class="text-xl font-bold">Find New Users</h3>
+                <button id="close-search-btn" class="text-gray-400 hover:text-gray-600">
+                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-6 h-6"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
+                </button>
+            </div>
+            <input type="text" id="search-input" placeholder="Search all online users..."
+                   class="w-full px-4 py-2 border border-gray-300 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-blue-500">
+            <div id="search-results" class="flex-grow overflow-y-auto mt-4 space-y-1">
+                <!-- Search results will be populated here -->
+            </div>
+        </div>
+    </div>
+
+
+    <!-- Main App Container -->
+    <div id="app-container" class="w-full max-w-4xl h-[90vh] max-h-[800px] bg-white rounded-xl shadow-2xl flex hidden">
+        <aside class="w-1/3 min-w-[250px] bg-gray-50 border-r border-gray-200 rounded-l-xl flex flex-col">
+            <header class="p-4 border-b border-gray-200">
+                <h1 class="text-xl font-bold text-blue-600">P2P Messenger</h1>
+                <div class="mt-2 text-xs">
+                    <span class="font-medium">Your ID:</span>
+                    <span id="my-user-id" class="text-gray-600">Connecting...</span>
+                </div>
+                <button id="logout-btn" class="mt-2 text-xs text-red-500 hover:underline">Logout</button>
+            </header>
+            <div class="p-4 border-b border-gray-200 flex justify-between items-center">
+                <h2 class="text-sm font-semibold text-gray-500 uppercase">Recent Chats</h2>
+                <button id="find-user-btn" class="text-xs bg-blue-500 hover:bg-blue-600 text-white font-semibold px-2 py-1 rounded-full">
+                    Find New User
+                </button>
+            </div>
+            <div id="user-list" class="flex-grow overflow-y-auto p-2 space-y-1">
+                <p id="no-users" class="p-4 text-sm text-gray-500">No recent chats. Find a user to start!</p>
+            </div>
+        </aside>
+
+        <!-- LAYOUT FIX: Added overflow-hidden to prevent main area from stretching -->
+        <main id="chat-app" class="w-2/3 flex-grow flex flex-col overflow-hidden">
+            <div id="chat-placeholder" class="flex-grow flex flex-col items-center justify-center text-gray-500">
+                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-24 h-24 text-gray-300">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M8.625 12a.375.375 0 11-.75 0 .375.375 0 01.75 0zm0 0H8.25m4.125 0a.375.375 0 11-.75 0 .375.375 0 01.75 0zm0 0H12m4.125 0a.375.375 0 11-.75 0 .375.375 0 01.75 0zm0 0h-.375M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+                <p class="mt-4 text-lg">Select a user to start a secure chat.</p>
+                <p class="text-sm">Messages are end-to-end encrypted.</p>
+            </div>
+
+            <!-- LAYOUT FIX: Added 'flex' and 'overflow-hidden' -->
+            <div id="active-chat" class="flex flex-grow flex-col hidden overflow-hidden">
+                <header class="bg-gray-50 text-gray-800 p-3 flex justify-between items-center border-b border-gray-200">
+                    <div>
+                        <h2 class="text-lg font-bold" id="peer-name"></h2>
+                        <p class="text-sm text-gray-500" id="status">Not connected</p>
+                        <p class="text-sm h-4 text-blue-600" id="typing-status"></p>
+                    </div>
+                    <div>
+                        <!-- V5: Added recording status -->
+                        <span id="recording-status" class="text-sm text-red-500 mr-4 hidden">Recording...</span>
+                        <button id="call-btn" class="text-sm text-blue-500 hover:text-blue-700 hover:underline font-medium px-3 py-1 rounded border border-blue-500 hidden">
+                            Call
+                        </button>
+                        <button id="hang-up-btn" class="text-sm text-red-500 hover:text-red-700 hover:underline font-medium px-3 py-1 rounded border border-red-500 hidden">
+                            Hang Up
+                        </button>
+                    </div>
+                </header>
+
+                <div id="messages" class="flex-grow p-4 space-y-3 overflow-y-auto bg-white" aria-live="polite"></div>
+
+                <!-- V5: Modified message form -->
+                <form id="message-form" class="p-3 bg-gray-100 flex gap-2 items-center border-t border-gray-200">
+                    
+                    <label id="file-btn-label" class="p-2 text-gray-500 hover:text-blue-500 cursor-pointer rounded-full hover:bg-gray-200 disabled:opacity-50 disabled:cursor-not-allowed">
+                        <input type="file" id="file-input" class="hidden" disabled>
+                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-6 h-6"><path stroke-linecap="round" stroke-linejoin="round" d="M18.375 12.739l-7.693 7.693a4.5 4.5 0 01-6.364-6.364l10.94-10.94A3 3 0 1119.5 7.372L8.552 18.32m.009-.01l-.01.01m5.699-9.941l-7.81 7.81a1.5 1.5 0 002.122 2.122l7.81-7.81" /></svg>
+                    </label>
+
+                    <input type="text" id="message-input" placeholder="Type an encrypted message..." autocomplete="off" required disabled
+                           class="flex-grow px-4 py-2 border border-gray-300 rounded-full bg-white focus:outline-none focus:ring-2 focus:ring-blue-500">
+                    
+                    <button type="button" id="record-btn" disabled
+                            class="p-2 text-gray-500 hover:text-blue-500 rounded-full hover:bg-gray-200 disabled:opacity-50 disabled:cursor-not-allowed">
+                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-6 h-6"><path stroke-linecap="round" stroke-linejoin="round" d="M12 18.75a.75.75 0 00.75-.75v-6a.75.75 0 00-1.5 0v6a.75.75 0 00.75.75zM19.5 12a7.5 7.5 0 11-15 0 7.5 7.5 0 0115 0z" /></svg>
+                    </button>
+
+                    <button type="submit" id="send-button" disabled
+                            class="bg-blue-500 text-white p-2 rounded-full w-10 h-10 flex-shrink-0 flex items-center justify-center hover:bg-blue-600 disabled:opacity-50 disabled:cursor-not-allowed">
+                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" class="w-5 h-5"><path d="M3.105 3.105a.5.5 0 01.815-.39l11.028 4.901a.5.5 0 010 .878l-11.028 4.901a.5.5 0 01-.815-.39V3.105z" /></svg>
+                    </button>
+                </form>
+            </div>
+        </main>
+    </div>
+
+    <!-- Incoming Call Modal -->
+    <div id="incoming-call-modal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 hidden">
+        <div class="bg-white rounded-lg shadow-xl p-6 max-w-sm w-full text-center">
+            <h3 class="text-lg font-bold">Incoming Call</h3>
+            <p id="caller-id" class="my-4 text-xl"></p>
+            <div class="flex gap-4 mt-6">
+                <button id="reject-call-btn" class="w-full bg-red-500 hover:bg-red-600 text-white font-bold py-2 px-4 rounded-lg">Reject</button>
+                <button id="accept-call-btn" class="w-full bg-blue-500 hover:bg-blue-600 text-white font-bold py-2 px-4 rounded-lg">Accept</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+    // --- DOM Elements ---
+    const $ = sel => document.querySelector(sel);
+    // Login
+    const usernameModal = $('#username-modal');
+    const loginForm = $('#login-form');
+    const usernameInput = $('#username-input');
+    const loginError = $('#login-error');
+    const appContainer = $('#app-container');
+    const logoutBtn = $('#logout-btn'); 
+    
+    // Search
+    const searchModal = $('#search-modal');
+    const findUserBtn = $('#find-user-btn');
+    const closeSearchBtn = $('#close-search-btn');
+    const searchInput = $('#search-input');
+    const searchResults = $('#search-results');
+    
+    // App
+    const myUserIDElement = $('#my-user-id');
+    const userListElement = $('#user-list');
+    const chatPlaceholder = $('#chat-placeholder');
+    const activeChat = $('#active-chat');
+    const peerNameElement = $('#peer-name');
+    const hangUpBtn = $('#hang-up-btn');
+    const callBtn = $('#call-btn'); 
+    const incomingCallModal = $('#incoming-call-modal');
+    const callerIDElement = $('#caller-id');
+    const acceptCallBtn = $('#accept-call-btn');
+    const rejectCallBtn = $('#reject-call-btn');
+    const status = $('#status');
+    const typingStatus = $('#typing-status');
+    const recordingStatus = $('#recording-status'); // V5
+    
+    // Chat Form
+    const messages = $('#messages');
+    const messageForm = $('#message-form');
+    const messageInput = $('#message-input');
+    const sendButton = $('#send-button');
+    const fileBtnLabel = $('#file-btn-label'); // V5
+    const fileInput = $('#file-input'); // V5
+    const recordBtn = $('#record-btn'); // V5
+
+    // --- State ---
+    let socket = null;
+    let peerConnection = null;
+    let dataChannel = null;
+    let cryptoKey = null;
+    let candidateQueue = [];
+    let peerTypingTimeout = null;
+    let callTimeout = null; 
+
+    let myUserID = null; 
+    let mySID = null;    
+    let currentPeerID = null;
+    let currentPeerSID = null;
+    let incomingCallData = null; 
+
+    let allOnlineUsers = {}; 
+    let recentChatPeers = new Set(); 
+
+    // V5: File & Audio State
+    let isRecording = false; // V5.1: Added recording state
+    let mediaRecorder = null;
+    let audioChunks = [];
+    let incomingFileData = {
+        buffer: [],
+        name: '',
+        size: 0,
+        type: '',
+        receivedSize: 0
+    };
+    const CHUNK_SIZE = 65536; // 64KB
+
+    // --- Config ---
+    // This is the change! An empty string tells Socket.IO to connect
+    // to the same server that served this HTML file.
+    const SIGNALING_SERVER_URL = ''; 
+    const STUN_SERVERS = { iceServers: [{ urls: 'stun:stun.l.google.com:19302' }] };
+
+    // --- UI helpers ---
+
+    /** V4: Selects a user, shows their chat window and history. */
+    function selectUserToChat(peerID, peerSID) {
+        if (peerConnection) {
+            logSystemMessage('Switched users, hanging up previous call.');
+            relaySignalTo(currentPeerSID, { type: 'hang_up' });
+            closeActiveChat(false); 
+        }
+
+        currentPeerID = peerID;
+        currentPeerSID = peerSID; 
+
+        chatPlaceholder.classList.add('hidden');
+        activeChat.classList.remove('hidden');
+        peerNameElement.textContent = peerID;
+        
+        messages.innerHTML = '';
+        loadChatHistory(currentPeerID); // V5: This only loads text
+
+        if (peerSID) {
+            // User is online
+            status.textContent = 'Not connected';
+            enableChatInputs(false); // V5: Disable inputs until connected
+            callBtn.classList.remove('hidden'); 
+            hangUpBtn.classList.add('hidden');
+            logSystemMessage(`Selected chat with ${peerID}. Press 'Call' to connect.`);
+        } else {
+            // User is offline
+            status.textContent = 'Offline';
+            enableChatInputs(false); // V5: Disable inputs
+            callBtn.classList.add('hidden'); 
+            hangUpBtn.classList.add('hidden');
+            logSystemMessage(`Viewing offline chat history with ${peerID}.`);
+        }
+        
+        messageInput.focus();
+    }
+    
+    /** V3: Resets the chat window state, optionally clearing the peer. */
+    function closeActiveChat(clearPeer = true) {
+        try { if (dataChannel) dataChannel.close(); } catch(e){}
+        try { if (peerConnection) peerConnection.close(); } catch(e){}
+        peerConnection = null; dataChannel = null; cryptoKey = null; candidateQueue = [];
+        incomingCallData = null;
+        if (callTimeout) clearTimeout(callTimeout);
+        callTimeout = null;
+        if (peerTypingTimeout) clearTimeout(peerTypingTimeout);
+        
+        // V5: Reset file buffer
+        incomingFileData = { buffer: [], name: '', size: 0, type: '', receivedSize: 0 };
+        if (mediaRecorder && mediaRecorder.state === "recording") {
+            mediaRecorder.stop();
+        }
+        // V5.1: Reset recording state and icon
+        isRecording = false;
+        recordingStatus.classList.add('hidden');
+        recordBtn.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-6 h-6"><path stroke-linecap="round" stroke-linejoin="round" d="M12 18.75a.75.75 0 00.75-.75v-6a.75.75 0 00-1.5 0v6a.75.75 0 00.75.75zM19.5 12a7.5 7.5 0 11-15 0 7.5 7.5 0 0115 0z" /></svg>`;
+
+
+        if (clearPeer) {
+            currentPeerID = null;
+            currentPeerSID = null;
+            chatPlaceholder.classList.remove('hidden'); 
+            activeChat.classList.add('hidden');
+            peerNameElement.textContent = '';
+            messages.innerHTML = '';
+        } else if (currentPeerID) {
+            const peerSID = allOnlineUsers[currentPeerID];
+            if (peerSID) {
+                status.textContent = 'Not connected';
+                callBtn.classList.remove('hidden');
+                hangUpBtn.classList.add('hidden');
+            } else {
+                status.textContent = 'Offline';
+                callBtn.classList.add('hidden');
+                hangUpBtn.classList.add('hidden');
+            }
+            typingStatus.textContent = '';
+            enableChatInputs(false); // V5: Disable inputs
+        }
+    }
+
+    /** V5: Helper to enable/disable all chat inputs */
+    function enableChatInputs(enabled) {
+        messageInput.disabled = !enabled;
+        sendButton.disabled = !enabled;
+        fileInput.disabled = !enabled;
+        recordBtn.disabled = !enabled;
+
+        // V5: Update file button label state
+        if (enabled) {
+            fileBtnLabel.classList.remove('disabled:opacity-50', 'disabled:cursor-not-allowed');
+            fileBtnLabel.classList.add('hover:text-blue-500', 'hover:bg-gray-200');
+        } else {
+            fileBtnLabel.classList.add('disabled:opacity-50', 'disabled:cursor-not-allowed');
+            fileBtnLabel.classList.remove('hover:text-blue-500', 'hover:bg-gray-200');
+        }
+    }
+
+    /** V4: Renders the "Recent Chats" list */
+    function renderUserList() {
+        userListElement.innerHTML = '';
+        if (recentChatPeers.size === 0) {
+            userListElement.innerHTML = '<p class="p-4 text-sm text-gray-500">No recent chats. Find a user to start!</p>';
+            return;
+        }
+
+        const sortedPeers = [...recentChatPeers].sort();
+
+        for (const id of sortedPeers) {
+            if (id === myUserID) continue;
+            
+            const sid = allOnlineUsers[id]; 
+            const isOnline = !!sid;
+
+            const btn = document.createElement('button');
+            btn.className = 'w-full text-left p-3 flex items-center gap-3 rounded-lg hover:bg-blue-100 transition-colors duration-150';
+            btn.dataset.id = id;
+            btn.dataset.sid = sid || ''; 
+            
+            const statusDot = isOnline 
+                ? `<span class="relative flex h-3 w-3"><span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-blue-400 opacity-75"></span><span class="relative inline-flex rounded-full h-3 w-3 bg-blue-500"></span></span>`
+                : `<span class="relative flex h-3 w-3"><span class="relative inline-flex rounded-full h-3 w-3 bg-gray-400"></span></span>`;
+
+            btn.innerHTML = `${statusDot}<span class="font-medium">${id}</span>`;
+            
+            btn.addEventListener('click', () => {
+                selectUserToChat(id, sid); 
+            });
+            userListElement.appendChild(btn);
+        }
+    }
+
+    /** V4: Renders the search results list */
+    function renderSearchResults(searchTerm = '') {
+        searchResults.innerHTML = '';
+        let count = 0;
+        const lowerSearchTerm = searchTerm.toLowerCase();
+        const sortedOnlineUsers = Object.keys(allOnlineUsers).sort();
+
+        for (const id of sortedOnlineUsers) {
+            if (id === myUserID) continue;
+            if (searchTerm && !id.toLowerCase().includes(lowerSearchTerm)) continue;
+            
+            count++;
+            const sid = allOnlineUsers[id];
+            const btn = document.createElement('button');
+            btn.className = 'w-full text-left p-3 flex items-center gap-3 rounded-lg hover:bg-blue-100 transition-colors duration-150';
+            btn.innerHTML = `<span class="font-medium">${id}</span>`;
+            
+            btn.addEventListener('click', () => {
+                recentChatPeers.add(id);
+                // V5: Don't save history here, wait for first message.
+                selectUserToChat(id, sid);
+                renderUserList(); 
+                searchModal.classList.add('hidden');
+                searchInput.value = '';
+            });
+            searchResults.appendChild(btn);
+        }
+
+        if (count === 0) {
+            searchResults.innerHTML = '<p class="p-4 text-sm text-gray-500">No online users found.</p>';
+        }
+    }
+
+
+    function logSystemMessage(msg) { logTextMessage(msg, 'system'); }
+    
+    /** V5: Renders a bubble with arbitrary HTML content */
+    function logHtmlMessage(htmlContent, cls) {
+        const bubble = document.createElement('div');
+        bubble.className = `p-3 rounded-lg max-w-xs md:max-w-md break-words ${cls}`;
+        if (cls === 'self') bubble.classList.add('ml-auto');
+        else if (cls === 'peer') bubble.classList.add('mr-auto');
+        else bubble.classList.add('text-gray-600', 'italic', 'text-sm', 'text-center');
+        
+        bubble.innerHTML = htmlContent;
+        messages.appendChild(bubble);
+        messages.scrollTop = messages.scrollHeight;
+    }
+
+    /** V5: Renders a text-only message */
+    function logTextMessage(msg, cls) {
+        const bubble = document.createElement('div');
+        bubble.className = `p-3 rounded-lg max-w-xs md:max-w-md break-words ${cls}`;
+        if (cls === 'self') bubble.classList.add('ml-auto');
+        else if (cls === 'peer') bubble.classList.add('mr-auto');
+        else bubble.classList.add('text-gray-600', 'italic', 'text-sm', 'text-center');
+        
+        bubble.textContent = msg; // Use textContent to prevent XSS
+        messages.appendChild(bubble);
+        messages.scrollTop = messages.scrollHeight;
+    }
+
+    /** V5: Renders a file message (image or link) */
+    function logFileMessage(fileBlob, fileName, cls) {
+        const url = URL.createObjectURL(fileBlob);
+        let html;
+
+        if (fileBlob.type.startsWith('image/')) {
+            html = `<img src="${url}" alt="${fileName}" class="max-w-full h-auto rounded-lg">
+                    <a href="${url}" download="${fileName}" class="text-sm text-blue-500 hover:underline block mt-1">${fileName}</a>`;
+        } else {
+            html = `<a href="${url}" download="${fileName}" class="text-sm font-medium p-3 bg-gray-200 rounded-lg flex items-center gap-2">
+                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-5 h-5 flex-shrink-0"><path stroke-linecap="round" stroke-linejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5a3.375 3.375 0 00-3.375-3.375H8.25m.75 12l3 3m0 0l3-3m-3 3v-6m-1.5-9H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 00-9-9z" /></svg>
+                        <span>${fileName}</span>
+                    </a>`;
+        }
+        logHtmlMessage(html, cls);
+    }
+
+    /** V5: Renders an audio message */
+    function logAudioMessage(audioBlob, cls) {
+        const url = URL.createObjectURL(audioBlob);
+        const html = `<audio controls src="${url}" class="chat-audio"></audio>`;
+        logHtmlMessage(html, cls);
+    }
+
+
+    // --- Signaling ---
+    function connectToSignaling() {
+        if (socket) socket.disconnect();
+        // This now connects to the same origin (your Render app)
+        socket = io(SIGNALING_SERVER_URL);
+
+        socket.on('connect', () => {
+            console.log('Connected to signaling server. Waiting to register.');
+            const savedUsername = localStorage.getItem('p2p_username');
+            if (savedUsername) {
+                myUserID = savedUsername;
+                socket.emit('register_user', { 'username': myUserID });
+            }
+        });
+
+        socket.on('your_identity', (data) => {
+            myUserID = data.id; mySID = data.sid;
+            myUserIDElement.textContent = myUserID;
+            console.log('Identity:', myUserID, mySID);
+            
+            localStorage.setItem('p2p_username', myUserID);
+
+            usernameModal.classList.add('hidden');
+            appContainer.classList.remove('hidden');
+            loginError.textContent = '';
+            usernameInput.disabled = false;
+
+            loadRecentChats();
+            renderUserList();
+        });
+        
+        socket.on('registration_failed', (data) => {
+            console.error('Registration failed:', data.error);
+            loginError.textContent = data.error;
+            usernameInput.disabled = false;
+            localStorage.removeItem('p2p_username');
+            myUserID = null;
+            usernameModal.classList.remove('hidden'); 
+        });
+
+        socket.on('user_list_update', (data) => {
+            allOnlineUsers = data.users || {};
+            renderUserList();
+
+            if (currentPeerID && !(currentPeerID in allOnlineUsers)) {
+                logSystemMessage(`${currentPeerID} went offline.`);
+                closeActiveChat(false); 
+                currentPeerSID = null; 
+            } else if (currentPeerID && (currentPeerID in allOnlineUsers)) {
+                currentPeerSID = allOnlineUsers[currentPeerID];
+                if (!peerConnection) { 
+                    selectUserToChat(currentPeerID, currentPeerSID);
+                }
+            }
+        });
+
+        socket.on('peer_hung_up', (data) => {
+            const peer_id = data.peer_id;
+            console.log('Peer hung up from server:', peer_id);
+
+            if (peer_id === currentPeerID) {
+                logSystemMessage('Peer disconnected.');
+                closeActiveChat(false); 
+            }
+            
+            if (incomingCallData && incomingCallData.from_id === peer_id) {
+                incomingCallModal.classList.add('hidden');
+                incomingCallData = null;
+                logSystemMessage('Caller disconnected.');
+            }
+        });
+
+        socket.on('signal_from_peer', async (signal) => {
+            console.log('Signal from peer:', signal.type, 'from', signal.from_id || signal.from_sid);
+
+            if (signal.type === 'offer') {
+                if (peerConnection) {
+                    console.log('Rejecting incoming call, already in a call.');
+                    socket.emit('relay_signal', { target_sid: signal.from_sid, payload: { type: 'busy' } });
+                    return;
+                }
+                
+                incomingCallData = signal; 
+                callerIDElement.textContent = `${signal.from_id || signal.from_sid} is calling...`;
+                incomingCallModal.classList.remove('hidden');
+                return;
+            }
+
+            if (signal.type === 'candidate') {
+                const candidateObj = signal.payload;
+                if (!peerConnection || !peerConnection.remoteDescription) {
+                    candidateQueue.push(candidateObj); return;
+                }
+                try {
+                    await peerConnection.addIceCandidate(new RTCIceCandidate(candidateObj));
+                } catch (e) { console.error('addIceCandidate failed', e); }
+                return;
+            }
+
+            if (signal.type === 'answer') {
+                if (callTimeout) clearTimeout(callTimeout); 
+                
+                if (peerConnection) {
+                    try {
+                        await peerConnection.setRemoteDescription(new RTCSessionDescription(signal.payload));
+                        await processCandidateQueue();
+                    } catch (e) { console.error('Error applying remote answer', e); }
+                }
+                return;
+            }
+
+            if (signal.type === 'busy') {
+                if (currentPeerSID === signal.from_sid) {
+                    if (callTimeout) clearTimeout(callTimeout); 
+                    status.textContent = 'User is busy'; 
+                    logSystemMessage('User is busy.');
+                    closeActiveChat(false); 
+                }
+                return;
+            }
+
+            if (signal.type === 'hang_up') {
+                if (currentPeerSID === signal.from_sid && (peerConnection || dataChannel)) { 
+                    logSystemMessage('Peer hung up.');
+                    closeActiveChat(false);
+                }
+                else if (currentPeerSID === signal.from_sid && status.textContent === 'Calling...') {
+                    if (callTimeout) clearTimeout(callTimeout);
+                    logSystemMessage('Call rejected.');
+                    closeActiveChat(false);
+                }
+                else if (incomingCallData && incomingCallData.from_sid === signal.from_sid) {
+                    incomingCallModal.classList.add('hidden'); 
+                    incomingCallData = null;
+                }
+                return;
+            }
+
+            console.warn('Unhandled signal:', signal);
+        });
+
+        socket.on('disconnect', () => {
+            logSystemMessage('Disconnected from signaling server.');
+            myUserIDElement.textContent = 'Disconnected';
+            allOnlineUsers = {}; 
+            renderUserList(); 
+            closeActiveChat(true); 
+            
+            usernameModal.classList.remove('hidden');
+            appContainer.classList.add('hidden');
+            usernameInput.disabled = false;
+            loginError.textContent = 'Disconnected. Retrying...';
+            
+            setTimeout(connectToSignaling, 2000);
+        });
+    }
+
+    async function processCandidateQueue() {
+        if (!peerConnection) return;
+        while (candidateQueue.length) {
+            const c = candidateQueue.shift();
+            try { await peerConnection.addIceCandidate(new RTCIceCandidate(c)); }
+            catch (e) { console.error('Error adding queued candidate', e); }
+        }
+    }
+
+    function relaySignalTo(targetSid, payload) {
+        if (!socket) return console.error("Socket not connected");
+        socket.emit('relay_signal', { target_sid: targetSid, payload });
+    }
+
+    // --- Encryption helpers ---
+    async function generateKey() {
+        cryptoKey = await window.crypto.subtle.generateKey({ name: 'AES-GCM', length: 256 }, true, ['encrypt','decrypt']);
+    }
+    async function exportKey() { if (!cryptoKey) await generateKey(); return await window.crypto.subtle.exportKey('jwk', cryptoKey); }
+    async function importKey(jwk) { cryptoKey = await window.crypto.subtle.importKey('jwk', jwk, { name: 'AES-GCM' }, true, ['encrypt','decrypt']); }
+
+    async function encryptMessage(text) {
+        if (!cryptoKey) return null;
+        const data = new TextEncoder().encode(text);
+        const iv = window.crypto.getRandomValues(new Uint8Array(12));
+        const ct = await window.crypto.subtle.encrypt({ name: 'AES-GCM', iv }, cryptoKey, data);
+        return JSON.stringify({ iv: Array.from(iv), ciphertext: Array.from(new Uint8Array(ct)) });
+    }
+    async function decryptMessage(encryptedJson) {
+        if (!cryptoKey) return '[DECRYPTION FAILED: NO KEY]';
+        try {
+            const { iv, ciphertext } = JSON.parse(encryptedJson);
+            const dec = await window.crypto.subtle.decrypt({ name: 'AES-GCM', iv: new Uint8Array(iv) }, cryptoKey, new Uint8Array(ciphertext));
+            return new TextDecoder().decode(dec);
+        } catch (e) { console.error('decrypt failed', e); return `[DECRYPTION FAILED: ${e?.message || e}]`; }
+    }
+
+    // --- WebRTC setup ---
+    async function startWebRTC(isCaller, remoteOffer = null, importedKey = null) {
+        if (peerConnection) closeActiveChat(false);
+
+        if (!isCaller) {
+            if (!incomingCallData) return logSystemMessage('Missing incoming call data.');
+            const jwk = incomingCallData.key || importedKey;
+            if (!jwk) return logSystemMessage('Missing encryption key from caller.');
+            await importKey(jwk);
+        }
+
+        const pc = new RTCPeerConnection(STUN_SERVERS);
+        peerConnection = pc;
+
+        pc.onicecandidate = (ev) => {
+            if (ev.candidate) {
+                relaySignalTo(currentPeerSID, { type: 'candidate', payload: ev.candidate.toJSON() });
+            }
+        };
+
+        pc.ondatachannel = (ev) => {
+            console.log('Got remote datachannel');
+            dataChannel = ev.channel; 
+            setupDataChannel(); // V5: Setup the new complex handler
+        };
+
+        pc.onconnectionstatechange = () => {
+            console.log('Connection state:', pc.connectionState);
+            if (pc.connectionState === 'connected') { 
+                status.textContent = 'P2P Connected (Secure)'; 
+                if (callTimeout) clearTimeout(callTimeout); 
+            }
+            if (['failed','disconnected','closed'].includes(pc.connectionState)) { 
+                logSystemMessage('Peer connection lost.'); 
+                closeActiveChat(false); 
+            }
+        };
+
+        if (isCaller) {
+            status.textContent = 'Calling...';
+            callBtn.classList.add('hidden');
+            hangUpBtn.classList.remove('hidden');
+
+            await generateKey();
+            const exported = await exportKey();
+            dataChannel = pc.createDataChannel('chat'); 
+            setupDataChannel(); // V5: Setup the new complex handler
+            
+            try {
+                const offerDesc = await pc.createOffer();
+                await pc.setLocalDescription(offerDesc);
+                relaySignalTo(currentPeerSID, { type: 'offer', payload: offerDesc, key: exported });
+                
+                if (callTimeout) clearTimeout(callTimeout);
+                callTimeout = setTimeout(() => {
+                    if (peerConnection && peerConnection.connectionState !== 'connected') {
+                        logSystemMessage('User is not available (call timed out).');
+                        relaySignalTo(currentPeerSID, { type: 'hang_up' });
+                        closeActiveChat(false);
+                    }
+                }, 10000); 
+
+            } catch (e) { console.error('createOffer failed', e); }
+        } else {
+            try {
+                status.textContent = 'Connecting...';
+                callBtn.classList.add('hidden');
+                hangUpBtn.classList.remove('hidden');
+
+                const offerDesc = incomingCallData.payload; 
+                await pc.setRemoteDescription(new RTCSessionDescription(offerDesc));
+                await processCandidateQueue();
+                const answerDesc = await pc.createAnswer();
+                await pc.setLocalDescription(answerDesc);
+                relaySignalTo(incomingCallData.from_sid, { type: 'answer', payload: answerDesc });
+                
+                incomingCallModal.classList.add('hidden');
+                incomingCallData = null;
+            } catch (e) { console.error('answer creation failed', e); }
+        }
+    }
+
+    /** V5: THE BIG ONE. Setup the datachannel message handler */
+    function setupDataChannel() {
+        if (!dataChannel) return;
+        dataChannel.binaryType = 'arraybuffer'; // We need this for file chunks
+        
+        dataChannel.onopen = () => {
+            console.log('Data channel open');
+            status.textContent = 'P2P Connected (Secure)';
+            enableChatInputs(true); // V5: Enable all inputs
+            messageInput.focus();
+            
+            logSystemMessage('Secure P2P connection established.');
+        };
+
+        dataChannel.onmessage = async (ev) => {
+            
+            if (typeof ev.data === 'string') {
+                // --- HANDLE STRING MESSAGES (Typing, Encrypted Text, Encrypted Metadata) ---
+
+                // 1. Check for unencrypted typing signal
+                try {
+                    const parsed = JSON.parse(ev.data);
+                    if (parsed && parsed.type === 'typing') {
+                        handleTypingSignal();
+                        return;
+                    }
+                } catch (e) { /* Not a typing signal, continue. */ }
+
+                // 2. If not typing, assume it's an encrypted payload
+                let decryptedPayload;
+                try {
+                    decryptedPayload = await decryptMessage(ev.data);
+                } catch (e) {
+                    console.error("Failed to decrypt message:", e);
+                    return;
+                }
+
+                // 3. Check if the decrypted payload is metadata or a text message
+                let parsedMeta;
+                try {
+                    parsedMeta = JSON.parse(decryptedPayload);
+                } catch (e) { 
+                    /* Not JSON, so it's a plain text message */
+                }
+
+                if (parsedMeta && (parsedMeta.type === 'file_start' || parsedMeta.type === 'audio_start')) {
+                    // --- IT'S FILE/AUDIO METADATA ---
+                    incomingFileData = {
+                        buffer: [],
+                        name: parsedMeta.name,
+                        size: parsedMeta.size,
+                        type: parsedMeta.fileType,
+                        receivedSize: 0
+                    };
+                    const typeLabel = parsedMeta.type === 'file_start' ? 'file' : 'audio';
+                    logSystemMessage(`Receiving ${typeLabel}: ${parsedMeta.name}`);
+                    status.textContent = `Receiving: 0%`;
+
+                } else {
+                    // --- IT'S A REGULAR TEXT MESSAGE ---
+                    logTextMessage(decryptedPayload, 'peer');
+                    saveMessageToHistory(currentPeerID, { sender: 'peer', text: decryptedPayload });
+                }
+
+            } else if (ev.data instanceof ArrayBuffer) {
+                // --- HANDLE ARRAYBUFFER MESSAGES (File/Audio Chunks) ---
+                
+                if (!incomingFileData.size || incomingFileData.size === 0) {
+                    console.warn('Received ArrayBuffer chunk without preceding metadata. Discarding.');
+                    return;
+                }
+
+                incomingFileData.buffer.push(ev.data);
+                incomingFileData.receivedSize += ev.data.byteLength;
+
+                const percent = Math.round((incomingFileData.receivedSize / incomingFileData.size) * 100);
+                status.textContent = `Receiving: ${percent}%`;
+
+                // Check if file transfer is complete
+                if (incomingFileData.receivedSize >= incomingFileData.size) {
+                    const receivedBlob = new Blob(incomingFileData.buffer, { type: incomingFileData.type });
+
+                    if (incomingFileData.type.startsWith('audio/')) {
+                        logAudioMessage(receivedBlob, 'peer');
+                        // Note: We don't save blobs to history
+                    } else {
+                        logFileMessage(receivedBlob, incomingFileData.name, 'peer');
+                        // Note: We don't save blobs to history
+                    }
+
+                    // Reset buffer and status
+                    incomingFileData = { buffer: [], name: '', size: 0, type: '', receivedSize: 0 };
+                    status.textContent = 'P2P Connected (Secure)';
+                }
+            }
+        };
+
+        dataChannel.onclose = () => { 
+            logSystemMessage('Data channel closed.'); 
+            closeActiveChat(false); 
+        };
+    }
+
+    function handleTypingSignal() {
+        typingStatus.textContent = 'Peer is typing...';
+        if (peerTypingTimeout) clearTimeout(peerTypingTimeout);
+        peerTypingTimeout = setTimeout(() => typingStatus.textContent = '', 2000);
+    }
+
+    /** V5: Helper function to chunk and send a file or blob */
+    async function sendChunkedData(blob, metadataType, fileName, fileType) {
+        if (!dataChannel || dataChannel.readyState !== 'open') {
+            logSystemMessage('Cannot send file, data channel not open.');
+            return;
+        }
+
+        // 1. Send metadata (encrypted)
+        const metadata = {
+            type: metadataType, // 'file_start' or 'audio_start'
+            name: fileName,
+            size: blob.size,
+            fileType: fileType
+        };
+        try {
+            const encryptedMetadata = await encryptMessage(JSON.stringify(metadata));
+            dataChannel.send(encryptedMetadata);
+        } catch (e) {
+            console.error('Failed to send metadata', e);
+            logSystemMessage('Error starting file transfer.');
+            return;
+        }
+
+        // 2. Read blob as ArrayBuffer
+        const buffer = await blob.arrayBuffer();
+
+        // 3. Send chunks
+        let offset = 0;
+        const sendInterval = setInterval(() => {
+            if (offset >= buffer.byteLength) {
+                clearInterval(sendInterval);
+                status.textContent = 'P2P Connected (Secure)'; // Restore status
+                return;
+            }
+
+            // Check dataChannel buffer, pause if full
+            if (dataChannel.bufferedAmount > 1024 * 1024) { // 1MB buffer
+                console.log('Data channel buffer full, pausing sending...');
+                return; // Wait for next interval to check again
+            }
+
+            const chunk = buffer.slice(offset, offset + CHUNK_SIZE);
+            dataChannel.send(chunk);
+            offset += chunk.byteLength;
+            
+            const percent = Math.round((offset / buffer.byteLength) * 100);
+            status.textContent = `Sending: ${percent}%`;
+
+        }, 5); // Send a chunk every 5ms (adjust as needed)
+    }
+
+    // --- Event Listeners ---
+    messageForm.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const text = messageInput.value.trim(); if (!text) return;
+        if (!dataChannel || dataChannel.readyState !== 'open') {
+            logSystemMessage('Cannot send message, data channel not open. Press "Call" to connect.');
+            return;
+        }
+        
+        // V5: Send as encrypted *text*, not metadata
+        try {
+            const payload = await encryptMessage(text);
+            dataChannel.send(payload);
+            logTextMessage(text, 'self');
+            saveMessageToHistory(currentPeerID, { sender: 'self', text });
+            messageInput.value = '';
+        } catch (e) {
+            console.error("Failed to encrypt/send message", e);
+            logSystemMessage("Error sending message.");
+        }
+    });
+
+    messageInput.addEventListener('input', () => {
+        if (dataChannel && dataChannel.readyState === 'open') {
+            try {
+                // V5: This is an unencrypted string, handled first in onmessage
+                dataChannel.send(JSON.stringify({ type: 'typing' }));
+            } catch (e) {
+                console.warn("Could not send typing signal", e);
+            }
+        }
+    });
+
+    callBtn.addEventListener('click', () => {
+        if (currentPeerID && currentPeerSID) {
+            startWebRTC(true).catch(err => console.error(err));
+        } else if (currentPeerID) {
+            logSystemMessage(`Cannot call, ${currentPeerID} is offline.`);
+        } else {
+            logSystemMessage('Please select a user to call.');
+        }
+    });
+
+    hangUpBtn.addEventListener('click', () => {
+        if (currentPeerSID) relaySignalTo(currentPeerSID, { type: 'hang_up' });
+        logSystemMessage('You hung up.');
+        closeActiveChat(false); 
+    });
+
+    acceptCallBtn.addEventListener('click', async () => {
+        if (!incomingCallData) return;
+        
+        const peerID = incomingCallData.from_id || incomingCallData.from_sid;
+        const peerSID = incomingCallData.from_sid;
+
+        recentChatPeers.add(peerID);
+        renderUserList();
+        selectUserToChat(peerID, peerSID);
+        
+        await startWebRTC(false);
+    });
+
+    rejectCallBtn.addEventListener('click', () => {
+        if (!incomingCallData) return;
+        relaySignalTo(incomingCallData.from_sid, { type: 'hang_up' });
+        logSystemMessage(`You rejected the call from ${incomingCallData.from_id || incomingCallData.from_sid}.`);
+        incomingCallModal.classList.add('hidden'); incomingCallData = null;
+    });
+
+    loginForm.addEventListener('submit', (e) => {
+        e.preventDefault();
+        const username = usernameInput.value.trim();
+        if (!username) {
+            loginError.textContent = 'Please enter a username.';
+            return;
+        }
+        usernameInput.disabled = true;
+        loginError.textContent = 'Connecting...';
+        
+        if (!socket || !socket.connected) {
+            connectToSignaling();
+        }
+        socket.emit('register_user', { 'username': username });
+    });
+
+    logoutBtn.addEventListener('click', () => {
+        localStorage.removeItem('p2p_username');
+        if (socket) socket.disconnect();
+        
+        myUserID = null; mySID = null;
+        currentPeerID = null; currentPeerSID = null;
+        allOnlineUsers = {};
+        recentChatPeers.clear();
+        
+        closeActiveChat(true); 
+        renderUserList();
+        
+        usernameInput.value = '';
+        usernameInput.disabled = false;
+        loginError.textContent = '';
+        usernameModal.classList.remove('hidden');
+        appContainer.classList.add('hidden');
+    });
+
+    findUserBtn.addEventListener('click', () => {
+        renderSearchResults(); 
+        searchModal.classList.remove('hidden');
+        searchInput.focus();
+    });
+
+    closeSearchBtn.addEventListener('click', () => {
+        searchModal.classList.add('hidden');
+        searchInput.value = '';
+    });
+
+    searchInput.addEventListener('input', () => {
+        renderSearchResults(searchInput.value);
+    });
+
+    // --- V5: New Listeners for File & Audio ---
+
+    fileInput.addEventListener('change', (event) => {
+        const file = event.target.files[0];
+        if (!file) return;
+
+        logSystemMessage(`Sending file: ${file.name}`);
+        logFileMessage(file, file.name, 'self'); // Optimistic display
+        
+        sendChunkedData(file, 'file_start', file.name, file.type)
+            .catch(err => {
+                console.error("File send error:", err);
+                logSystemMessage(`Error sending file: ${err.message}`);
+            });
+        
+        // Reset file input
+        event.target.value = null;
+    });
+
+    /** V5.1: New click-to-toggle audio recording handler */
+    async function handleRecordClick() {
+        if (isRecording) {
+            // --- STOP RECORDING ---
+            if (mediaRecorder && mediaRecorder.state === "recording") {
+                mediaRecorder.stop(); // This will trigger the 'onstop' handler
+            }
+            recordingStatus.classList.add('hidden');
+            isRecording = false;
+            
+            // Change icon back to mic
+            recordBtn.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-6 h-6"><path stroke-linecap="round" stroke-linejoin="round" d="M12 18.75a.75.75 0 00.75-.75v-6a.75.75 0 00-1.5 0v6a.75.75 0 00.75.75zM19.5 12a7.5 7.5 0 11-15 0 7.5 7.5 0 0115 0z" /></svg>`;
+            
+        } else {
+            // --- START RECORDING ---
+            if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+                logSystemMessage("Audio recording is not supported by your browser.");
+                return;
+            }
+            
+            try {
+                const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                mediaRecorder = new MediaRecorder(stream, { mimeType: 'audio/webm' });
+                audioChunks = [];
+
+                mediaRecorder.ondataavailable = (event) => {
+                    audioChunks.push(event.data);
+                };
+
+                mediaRecorder.onstop = () => {
+                    const audioBlob = new Blob(audioChunks, { type: 'audio/webm' });
+                    const fileName = `audio_message_${Date.now()}.webm`;
+                    
+                    logSystemMessage('Sending audio message...');
+                    logAudioMessage(audioBlob, 'self'); // Optimistic display
+                    
+                    sendChunkedData(audioBlob, 'audio_start', fileName, audioBlob.type)
+                        .catch(err => {
+                            console.error("Audio send error:", err);
+                            logSystemMessage(`Error sending audio: ${err.message}`);
+                        });
+                    
+                    // Clean up
+                    stream.getTracks().forEach(track => track.stop());
+                    audioChunks = [];
+                    mediaRecorder = null;
+                    isRecording = false; // Ensure state is reset
+                    
+                    // Reset icon just in case
+                    recordBtn.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-6 h-6"><path stroke-linecap="round" stroke-linejoin="round" d="M12 18.75a.75.75 0 00.75-.75v-6a.75.75 0 00-1.5 0v6a.75.75 0 00.75.75zM19.5 12a7.5 7.5 0 11-15 0 7.5 7.5 0 0115 0z" /></svg>`;
+                    recordingStatus.classList.add('hidden');
+                };
+
+                mediaRecorder.start();
+                recordingStatus.classList.remove('hidden');
+                isRecording = true;
+                
+                // Change icon to stop
+                recordBtn.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-6 h-6 text-red-500"><path stroke-linecap="round" stroke-linejoin="round" d="M5.25 7.5A2.25 2.25 0 017.5 5.25h9a2.25 2.25 0 012.25 2.25v9a2.25 2.25 0 01-2.25 2.25h-9a2.25 2.25 0 01-2.25-2.25v-9z" /></svg>`;
+                
+            } catch (err) {
+                console.error("Error starting recording:", err);
+                logSystemMessage(`Mic error: ${err.message}`);
+                isRecording = false;
+            }
+        }
+    }
+
+    recordBtn.addEventListener('click', handleRecordClick);
+
+    // --- LocalStorage history (V5: Only for text) ---
+    function getHistoryKey(peerID) { 
+        if (!myUserID || !peerID) return null; 
+        return `p2p_chat_history_${myUserID}_${peerID}`; 
+    }
+    
+    function saveMessageToHistory(peerID, msg) { 
+        // V5: Only save text messages
+        if (msg.text) {
+            recentChatPeers.add(peerID);
+            const k = getHistoryKey(peerID); if (!k) return; 
+            try { 
+                const arr = JSON.parse(localStorage.getItem(k) || '[]'); 
+                arr.push(msg); // msg is { sender: 'self', text: '...' }
+                if (arr.length > 200) arr.splice(0, arr.length - 200); 
+                localStorage.setItem(k, JSON.stringify(arr)); 
+            } catch(e){console.error(e);} 
+        }
+    }
+    
+    function loadChatHistory(peerID) { 
+        const k = getHistoryKey(peerID); if (!k) return; 
+        try { 
+            const arr = JSON.parse(localStorage.getItem(k) || '[]'); 
+            messages.innerHTML = ''; 
+            for (const m of arr) {
+                // V5: Only render text messages from history
+                if (m.text) {
+                    logTextMessage(m.text, m.sender);
+                }
+            }
+        } catch(e){ console.error(e); messages.innerHTML = ''; } 
+    }
+
+    function loadRecentChats() {
+        recentChatPeers.clear();
+        if (!myUserID) return; 
+
+        for (let i = 0; i < localStorage.length; i++) {
+            const key = localStorage.key(i);
+            const prefix = `p2p_chat_history_${myUserID}_`;
+            if (key.startsWith(prefix)) {
+                const peerID = key.substring(prefix.length);
+                recentChatPeers.add(peerID);
+            }
+        }
+    }
+
+    function initializeApp() {
+        const savedUsername = localStorage.getItem('p2p_username');
+        if (savedUsername) {
+            usernameInput.value = savedUsername;
+            usernameInput.disabled = true;
+            loginError.textContent = 'Connecting...';
+            
+            connectToSignaling();
+        } else {
+            usernameModal.classList.remove('hidden');
+        }
+    }
+    
+    initializeApp();
+
+    </script>
+</body>
+</html>
+
+
+

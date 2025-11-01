@@ -7,6 +7,7 @@
     <meta name="theme-color" content="#1a1a2e">
     <title>WispherGrid - Peer-to-Peer Chat</title>
     <link rel="manifest" href="manifest.json">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <link rel="stylesheet" href="css/style.css">
 </head>
 <body>
@@ -40,7 +41,7 @@
                         autocomplete="off"
                     >
                     <button id="generate-room-btn" class="btn-secondary" title="Generate random room name">
-                        🎲
+                        <i class="fas fa-dice"></i>
                     </button>
                 </div>
                 
@@ -64,24 +65,40 @@
         <div id="chat-screen" class="screen">
             <div class="chat-container">
                 <header class="chat-header">
-                    <button id="back-btn" class="btn-icon" title="Leave room">←</button>
+                    <button id="back-btn" class="btn-icon" title="Leave room">
+                        <i class="fas fa-arrow-left"></i>
+                    </button>
                     <div class="room-info">
                         <h2 id="room-name-display">Room</h2>
                         <p id="peer-count">Connecting...</p>
                     </div>
                     <div class="header-actions">
-                        <button id="connection-status-btn" class="btn-icon" title="Connection Status">🔗</button>
-                        <button id="settings-btn" class="btn-icon" title="Settings">⚙️</button>
+                        <button id="video-call-btn" class="btn-icon" title="Start Video Call">
+                            <i class="fas fa-video"></i>
+                        </button>
+                        <button id="connection-status-btn" class="btn-icon" title="Connection Status">
+                            <i class="fas fa-link"></i>
+                        </button>
+                        <button id="settings-btn" class="btn-icon" title="Settings">
+                            <i class="fas fa-cog"></i>
+                        </button>
                     </div>
                 </header>
                 
-                <div id="media-container" class="compact-videos">
+                <div id="media-container" class="compact-videos hidden">
                     <div id="remote-videos" class="remote-videos-grid"></div>
                     <div id="local-video-wrapper" class="local-video-compact">
                         <video id="local-video" autoplay muted playsinline></video>
                         <div class="video-controls">
-                            <button id="toggle-video" class="btn-video" title="Toggle Video">📹</button>
-                            <button id="toggle-audio" class="btn-video" title="Toggle Audio">🎤</button>
+                            <button id="toggle-video" class="btn-video" title="Toggle Video">
+                                <i class="fas fa-video"></i>
+                            </button>
+                            <button id="toggle-audio" class="btn-video" title="Toggle Audio">
+                                <i class="fas fa-microphone"></i>
+                            </button>
+                            <button id="end-call-btn" class="btn-video btn-end-call" title="End Call">
+                                <i class="fas fa-phone"></i>
+                            </button>
                         </div>
                     </div>
                 </div>
@@ -91,7 +108,9 @@
                 </div>
                 
                 <div class="message-input-container">
-                    <button id="attach-btn" class="btn-attach" title="Attach file">📎</button>
+                    <button id="attach-btn" class="btn-attach" title="Attach file">
+                        <i class="fas fa-paperclip"></i>
+                    </button>
                     <input 
                         type="text" 
                         id="message-input" 
@@ -100,7 +119,9 @@
                         autocomplete="off"
                     >
                     <input type="file" id="file-input" style="display: none;" multiple>
-                    <button id="send-btn" class="btn-send">Send</button>
+                    <button id="send-btn" class="btn-send">
+                        <i class="fas fa-paper-plane"></i>
+                    </button>
                 </div>
                 
                 <!-- Connection Status / Manual Signaling -->
@@ -149,12 +170,13 @@
                         </label>
                     </div>
                     <div class="setting-group">
-                        <label for="theme-select">Theme</label>
+                        <!-- Don't need this
+                         <label for="theme-select">Theme</label>
                         <select id="theme-select">
                             <option value="dark">Dark</option>
                             <option value="light">Light</option>
                             <option value="auto">Auto</option>
-                        </select>
+                        </select> -->
                     </div>
                 </div>
             </div>

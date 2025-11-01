@@ -34,7 +34,9 @@ class WispherGrid {
             () => this.leaveRoom(),
             (message) => this.sendMessage(message),
             (enabled) => this.toggleVideo(enabled),
-            (enabled) => this.toggleAudio(enabled)
+            (enabled) => this.toggleAudio(enabled),
+            () => this.startVideoCall(),
+            () => this.endVideoCall()
         );
 
         // Setup file and connection callbacks
@@ -43,6 +45,12 @@ class WispherGrid {
             () => this.showConnectionStatus(),
             () => this.copyConnectionInfo(),
             (signalData) => this.processManualSignal(signalData)
+        );
+
+        // Setup video call button
+        this.ui.setVideoCallHandlers(
+            () => this.startVideoCall(),
+            () => this.endVideoCall()
         );
 
         // Check for room in URL
@@ -72,13 +80,41 @@ class WispherGrid {
             
             if (state === 'connected') {
                 this.ui.showToast('Peer connected', 'success');
-            } else if (state === 'disconnected' || state === 'failed') {
+                // Update peer connection status
                 const peerInfo = this.connectedPeers.get(peerId);
                 if (peerInfo) {
-                    this.ui.displaySystemMessage(`${peerInfo.username} left`);
+                    peerInfo.connected = true;
+                }
+            } else if (state === 'disconnected') {
+                // Don't immediately remove - wait a bit in case of temporary disconnection
+                const peerInfo = this.connectedPeers.get(peerId);
+                if (peerInfo && !peerInfo.disconnectTimer) {
+                    peerInfo.disconnectTimer = setTimeout(() => {
+                        if (this.connectedPeers.has(peerId)) {
+                            const pInfo = this.connectedPeers.get(peerId);
+                            this.ui.displaySystemMessage(`${pInfo.username} left`);
+                            this.ui.removeRemoteVideo(peerId);
+                            this.connectedPeers.delete(peerId);
+                            this.updatePeerCount();
+                        }
+                    }, 3000); // Wait 3 seconds before considering disconnected
+                }
+            } else if (state === 'failed') {
+                // Only remove on hard failure
+                const peerInfo = this.connectedPeers.get(peerId);
+                if (peerInfo) {
+                    this.ui.displaySystemMessage(`${peerInfo.username} disconnected`);
                     this.ui.removeRemoteVideo(peerId);
+                    this.webrtc.closePeerConnection(peerId);
                     this.connectedPeers.delete(peerId);
                     this.updatePeerCount();
+                }
+            } else if (state === 'connecting') {
+                // Reset disconnect timer if reconnecting
+                const peerInfo = this.connectedPeers.get(peerId);
+                if (peerInfo && peerInfo.disconnectTimer) {
+                    clearTimeout(peerInfo.disconnectTimer);
+                    peerInfo.disconnectTimer = null;
                 }
             }
         };
@@ -120,18 +156,10 @@ class WispherGrid {
             // Join room
             this.room.joinRoom(roomId, userId, username);
             
-            // Initialize local media
-            const videoEnabled = this.ui.settings.enableVideo;
-            const audioEnabled = this.ui.settings.enableAudio;
-            
-            try {
-                const localStream = await this.webrtc.initializeLocalStream(videoEnabled, audioEnabled);
-                this.ui.setLocalVideo(localStream);
-            } catch (error) {
-                console.error('Error accessing media:', error);
-                this.ui.showToast('Could not access camera/microphone', 'error');
-                // Continue without media
-            }
+            // Don't initialize media yet - wait for video call button
+            this.videoCallActive = false;
+            this.pendingOffers = new Map(); // Track pending offers
+            this.pendingAnswers = new Map(); // Track pending answers
             
             // Setup signaling
             this.room.initializeSignaling(
@@ -142,6 +170,7 @@ class WispherGrid {
             
             // Show chat screen
             this.ui.showChatScreen(roomId);
+            this.ui.showVideoContainer(false); // Hide video container initially
             this.ui.displaySystemMessage(`Joined room: ${roomId}`);
             
             // Update URL
@@ -151,6 +180,77 @@ class WispherGrid {
             console.error('Error joining room:', error);
             this.ui.showToast('Error joining room', 'error');
         }
+    }
+
+    /**
+     * Start video call
+     */
+    async startVideoCall() {
+        if (this.videoCallActive) return;
+
+        try {
+            this.videoCallActive = true;
+            this.ui.showVideoContainer(true);
+            
+            // Request media permissions
+            const videoEnabled = this.ui.settings.enableVideo;
+            const audioEnabled = this.ui.settings.enableAudio;
+            
+            try {
+                const localStream = await this.webrtc.initializeLocalStream(videoEnabled, audioEnabled);
+                this.ui.setLocalVideo(localStream);
+                
+                // Add media tracks to all existing peer connections
+                this.connectedPeers.forEach((peerInfo, peerId) => {
+                    const peer = this.webrtc.peers.get(peerId);
+                    if (peer && peer.pc) {
+                        const pcState = peer.pc.signalingState;
+                        if (pcState !== 'closed' && pcState !== 'have-local-offer') {
+                            // Add tracks to existing connection
+                            localStream.getTracks().forEach(track => {
+                                const sender = peer.pc.getSenders().find(s => 
+                                    s.track && s.track.kind === track.kind
+                                );
+                                if (sender) {
+                                    sender.replaceTrack(track);
+                                } else {
+                                    peer.pc.addTrack(track, localStream);
+                                }
+                            });
+                            
+                            // If connection is stable, renegotiate
+                            if (pcState === 'stable' && peer.pc.localDescription === null) {
+                                this.webrtc.createOffer(peerId).then(offer => {
+                                    this.room.sendSignal(peerId, 'offer', offer);
+                                }).catch(err => console.error('Error renegotiating:', err));
+                            }
+                        }
+                    }
+                });
+                
+                this.ui.showToast('Video call started', 'success');
+            } catch (error) {
+                console.error('Error accessing media:', error);
+                this.ui.showToast('Could not access camera/microphone', 'error');
+                this.videoCallActive = false;
+                this.ui.showVideoContainer(false);
+            }
+        } catch (error) {
+            console.error('Error starting video call:', error);
+            this.videoCallActive = false;
+        }
+    }
+
+    /**
+     * End video call
+     */
+    endVideoCall() {
+        if (!this.videoCallActive) return;
+        
+        this.videoCallActive = false;
+        this.webrtc.stopLocalStream();
+        this.ui.showVideoContainer(false);
+        this.ui.showToast('Video call ended', 'info');
     }
 
     /**
@@ -180,28 +280,33 @@ class WispherGrid {
 
         console.log(`Peer joining: ${peerId}`, data);
         
+        // Store peer info immediately
         this.connectedPeers.set(peerId, {
             username: data.username || 'Unknown',
-            connectedAt: Date.now()
+            connectedAt: Date.now(),
+            connected: false
         });
 
         this.ui.displaySystemMessage(`${data.username || 'Someone'} joined`);
         this.updatePeerCount();
 
-            // Create peer connection
-            const isInitiator = this.room.userId.localeCompare(peerId) > 0; // Simple initiator selection
+        // Create peer connection for data channel (text messaging)
+        // Media will be added when video call starts
+        const isInitiator = this.room.userId.localeCompare(peerId) > 0;
+        
+        try {
             await this.webrtc.createPeerConnection(peerId, isInitiator);
 
             if (isInitiator) {
                 // We initiate - create offer
-                try {
-                    const offer = await this.webrtc.createOffer(peerId);
-                    this.room.sendSignal(peerId, 'offer', offer);
-                } catch (error) {
-                    console.error('Error creating offer:', error);
-                }
+                const offer = await this.webrtc.createOffer(peerId);
+                this.room.sendSignal(peerId, 'offer', offer);
             }
             // If not initiator, wait for offer
+        } catch (error) {
+            console.error('Error creating peer connection:', error);
+            this.ui.showToast('Failed to connect to peer', 'error');
+        }
     }
 
     /**
@@ -226,18 +331,38 @@ class WispherGrid {
             switch (type) {
                 case 'offer':
                     // Receive offer, create answer
-                    let pc = this.webrtc.peers.get(peerId);
-                    if (!pc) {
-                        const connection = await this.webrtc.createPeerConnection(peerId, false);
-                        pc = connection.pc;
+                    let existingPeer = this.webrtc.peers.get(peerId);
+                    if (!existingPeer) {
+                        // Create connection if it doesn't exist
+                        await this.webrtc.createPeerConnection(peerId, false);
+                        existingPeer = this.webrtc.peers.get(peerId);
                     }
-                    const answer = await this.webrtc.createAnswer(peerId, data);
-                    this.room.sendSignal(peerId, 'answer', answer);
+                    
+                    if (existingPeer && existingPeer.pc) {
+                        const pcState = existingPeer.pc.signalingState;
+                        if (pcState === 'stable' || pcState === 'have-local-offer') {
+                            // Can accept offer
+                            const answer = await this.webrtc.createAnswer(peerId, data);
+                            this.room.sendSignal(peerId, 'answer', answer);
+                        } else {
+                            // Store offer for later
+                            this.pendingOffers.set(peerId, data);
+                        }
+                    }
                     break;
                     
                 case 'answer':
                     // Receive answer
-                    await this.webrtc.setRemoteDescription(peerId, data);
+                    const peer = this.webrtc.peers.get(peerId);
+                    if (peer && peer.pc) {
+                        const pcState = peer.pc.signalingState;
+                        if (pcState === 'have-local-offer' || pcState === 'have-remote-offer') {
+                            await this.webrtc.setRemoteDescription(peerId, data);
+                        } else {
+                            // Store answer for later
+                            this.pendingAnswers.set(peerId, data);
+                        }
+                    }
                     break;
                     
                 case 'ice-candidate':

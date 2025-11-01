@@ -18,7 +18,7 @@ export class UIManager {
     /**
      * Initialize UI event listeners
      */
-    initialize(onJoinRoom, onLeaveRoom, onSendMessage, onToggleVideo, onToggleAudio) {
+    initialize(onJoinRoom, onLeaveRoom, onSendMessage, onToggleVideo, onToggleAudio, onStartVideoCall, onEndVideoCall) {
         // Home screen
         const joinBtn = document.getElementById('join-room-btn');
         const usernameInput = document.getElementById('username-input');
@@ -79,23 +79,43 @@ export class UIManager {
             }
         });
 
+        // Video call button
+        const videoCallBtn = document.getElementById('video-call-btn');
+        if (videoCallBtn) {
+            videoCallBtn.addEventListener('click', () => {
+                onStartVideoCall?.();
+            });
+        }
+
+        // End call button
+        const endCallBtn = document.getElementById('end-call-btn');
+        if (endCallBtn) {
+            endCallBtn.addEventListener('click', () => {
+                onEndVideoCall?.();
+            });
+        }
+
         // Video/Audio controls
         const toggleVideoBtn = document.getElementById('toggle-video');
         const toggleAudioBtn = document.getElementById('toggle-audio');
 
-        toggleVideoBtn.addEventListener('click', () => {
-            const enabled = !this.settings.enableVideo;
-            this.settings.enableVideo = enabled;
-            onToggleVideo(enabled);
-            this.updateVideoButton(toggleVideoBtn, enabled);
-        });
+        if (toggleVideoBtn) {
+            toggleVideoBtn.addEventListener('click', () => {
+                const enabled = !this.settings.enableVideo;
+                this.settings.enableVideo = enabled;
+                onToggleVideo(enabled);
+                this.updateVideoButton(toggleVideoBtn, enabled);
+            });
+        }
 
-        toggleAudioBtn.addEventListener('click', () => {
-            const enabled = !this.settings.enableAudio;
-            this.settings.enableAudio = enabled;
-            onToggleAudio(enabled);
-            this.updateAudioButton(toggleAudioBtn, enabled);
-        });
+        if (toggleAudioBtn) {
+            toggleAudioBtn.addEventListener('click', () => {
+                const enabled = !this.settings.enableAudio;
+                this.settings.enableAudio = enabled;
+                onToggleAudio(enabled);
+                this.updateAudioButton(toggleAudioBtn, enabled);
+            });
+        }
 
         // Settings modal
         const settingsBtn = document.getElementById('settings-btn');
@@ -222,6 +242,38 @@ export class UIManager {
         window.onShowConnectionStatus = onShowConnectionStatus;
         window.onCopyConnectionInfo = onCopyConnectionInfo;
         window.onPasteConnectionInfo = onPasteConnectionInfo;
+    }
+
+    /**
+     * Set video call button handlers
+     */
+    setVideoCallHandlers(onStartCall, onEndCall) {
+        const videoCallBtn = document.getElementById('video-call-btn');
+        const endCallBtn = document.getElementById('end-call-btn');
+        
+        if (videoCallBtn) {
+            videoCallBtn.addEventListener('click', onStartCall);
+            window.onStartVideoCall = onStartCall;
+        }
+        
+        if (endCallBtn) {
+            endCallBtn.addEventListener('click', onEndCall);
+            window.onEndVideoCall = onEndCall;
+        }
+    }
+
+    /**
+     * Show/hide video container
+     */
+    showVideoContainer(show) {
+        const mediaContainer = document.getElementById('media-container');
+        if (mediaContainer) {
+            if (show) {
+                mediaContainer.classList.remove('hidden');
+            } else {
+                mediaContainer.classList.add('hidden');
+            }
+        }
     }
 
     /**
@@ -356,20 +408,21 @@ export class UIManager {
     }
 
     /**
-     * Get file icon based on extension
+     * Get file icon based on extension (Font Awesome)
      */
     getFileIcon(fileName) {
         const ext = fileName.split('.').pop().toLowerCase();
         const icons = {
-            'pdf': '📄',
-            'doc': '📝', 'docx': '📝',
-            'xls': '📊', 'xlsx': '📊',
-            'jpg': '🖼️', 'jpeg': '🖼️', 'png': '🖼️', 'gif': '🖼️',
-            'mp4': '🎥', 'mov': '🎥', 'avi': '🎥',
-            'mp3': '🎵', 'wav': '🎵',
-            'zip': '📦', 'rar': '📦',
+            'pdf': '<i class="fas fa-file-pdf"></i>',
+            'doc': '<i class="fas fa-file-word"></i>', 'docx': '<i class="fas fa-file-word"></i>',
+            'xls': '<i class="fas fa-file-excel"></i>', 'xlsx': '<i class="fas fa-file-excel"></i>',
+            'jpg': '<i class="fas fa-file-image"></i>', 'jpeg': '<i class="fas fa-file-image"></i>', 
+            'png': '<i class="fas fa-file-image"></i>', 'gif': '<i class="fas fa-file-image"></i>',
+            'mp4': '<i class="fas fa-file-video"></i>', 'mov': '<i class="fas fa-file-video"></i>', 'avi': '<i class="fas fa-file-video"></i>',
+            'mp3': '<i class="fas fa-file-audio"></i>', 'wav': '<i class="fas fa-file-audio"></i>',
+            'zip': '<i class="fas fa-file-archive"></i>', 'rar': '<i class="fas fa-file-archive"></i>',
         };
-        return icons[ext] || '📎';
+        return icons[ext] || '<i class="fas fa-file"></i>';
     }
 
     /**
@@ -472,10 +525,28 @@ export class UIManager {
     }
 
     /**
+     * Show/hide video container
+     */
+    showVideoContainer(show) {
+        const container = document.getElementById('media-container');
+        if (container) {
+            if (show) {
+                container.classList.remove('hidden');
+            } else {
+                container.classList.add('hidden');
+            }
+        }
+    }
+
+    /**
      * Update video button state
      */
     updateVideoButton(btn, enabled) {
-        btn.textContent = enabled ? '📹' : '📹';
+        if (!btn) return;
+        const icon = btn.querySelector('i');
+        if (icon) {
+            icon.className = enabled ? 'fas fa-video' : 'fas fa-video-slash';
+        }
         btn.classList.toggle('muted', !enabled);
         btn.title = enabled ? 'Disable Video' : 'Enable Video';
     }
@@ -484,7 +555,11 @@ export class UIManager {
      * Update audio button state
      */
     updateAudioButton(btn, enabled) {
-        btn.textContent = enabled ? '🎤' : '🎤';
+        if (!btn) return;
+        const icon = btn.querySelector('i');
+        if (icon) {
+            icon.className = enabled ? 'fas fa-microphone' : 'fas fa-microphone-slash';
+        }
         btn.classList.toggle('muted', !enabled);
         btn.title = enabled ? 'Mute Audio' : 'Unmute Audio';
     }

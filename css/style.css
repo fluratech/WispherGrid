@@ -268,6 +268,11 @@ header h1 {
     color: var(--text-secondary);
 }
 
+/* Hidden class */
+.hidden {
+    display: none !important;
+}
+
 /* Media Container - Compact Videos */
 .compact-videos {
     display: flex;
@@ -279,6 +284,10 @@ header h1 {
     overflow-x: auto;
     overflow-y: hidden;
     gap: 8px;
+}
+
+.compact-videos.hidden {
+    display: none;
 }
 
 .remote-videos-grid {
@@ -364,6 +373,23 @@ header h1 {
 
 .btn-video.muted {
     background: rgba(241, 92, 109, 0.8);
+}
+
+.btn-end-call {
+    background: rgba(239, 68, 68, 0.9) !important;
+}
+
+.btn-end-call:hover {
+    background: rgba(239, 68, 68, 1) !important;
+}
+
+.btn-icon i {
+    font-size: 1.1rem;
+}
+
+#video-call-btn.active {
+    color: var(--accent);
+    background: var(--accent-light);
 }
 
 /* Messages - WhatsApp Style */

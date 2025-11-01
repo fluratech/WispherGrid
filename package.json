@@ -1,0 +1,23 @@
+{
+  "name": "wisphergrid",
+  "version": "1.0.0",
+  "description": "Peer-to-peer WebRTC communication app - serverless, decentralized, and ephemeral",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "serve": "node server.js"
+  },
+  "keywords": [
+    "webrtc",
+    "p2p",
+    "chat",
+    "video",
+    "peer-to-peer"
+  ],
+  "author": "",
+  "license": "MIT",
+  "engines": {
+    "node": ">=12.0.0"
+  }
+}
+

@@ -1,0 +1,147 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="WispherGrid - A peer-to-peer chat app that is serverless, decentralized, and ephemeral">
+    <meta name="theme-color" content="#1a1a2e">
+    <title>WispherGrid - Peer-to-Peer Chat</title>
+    <link rel="manifest" href="manifest.json">
+    <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+    <div id="app">
+        <!-- Home Screen -->
+        <div id="home-screen" class="screen active">
+            <div class="container">
+                <header>
+                    <h1>WispherGrid</h1>
+                    <p class="subtitle">Peer-to-Peer Communication</p>
+                </header>
+                
+                <div class="form-group">
+                    <label for="username-input">Your Name</label>
+                    <input 
+                        type="text" 
+                        id="username-input" 
+                        placeholder="Enter your name" 
+                        maxlength="30"
+                        autocomplete="off"
+                    >
+                </div>
+                
+                <div class="form-group">
+                    <label for="room-input">Room Name</label>
+                    <input 
+                        type="text" 
+                        id="room-input" 
+                        placeholder="Enter or generate room name" 
+                        maxlength="50"
+                        autocomplete="off"
+                    >
+                    <button id="generate-room-btn" class="btn-secondary" title="Generate random room name">
+                        🎲
+                    </button>
+                </div>
+                
+                <div class="button-group">
+                    <button id="join-room-btn" class="btn-primary">Join Room</button>
+                </div>
+                
+                <div class="info-box">
+                    <h3>How it works</h3>
+                    <ul>
+                        <li>🔒 All communication is encrypted end-to-end</li>
+                        <li>🌐 No central servers - direct peer-to-peer connection</li>
+                        <li>💨 Messages disappear when you leave</li>
+                        <li>📹 Support for video and audio calls</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Chat Room Screen -->
+        <div id="chat-screen" class="screen">
+            <div class="chat-container">
+                <header class="chat-header">
+                    <button id="back-btn" class="btn-icon" title="Leave room">←</button>
+                    <div class="room-info">
+                        <h2 id="room-name-display">Room</h2>
+                        <p id="peer-count">Connecting...</p>
+                    </div>
+                    <button id="settings-btn" class="btn-icon" title="Settings">⚙️</button>
+                </header>
+                
+                <div id="media-container">
+                    <div id="remote-videos"></div>
+                    <div id="local-video-wrapper">
+                        <video id="local-video" autoplay muted playsinline></video>
+                        <div class="video-controls">
+                            <button id="toggle-video" class="btn-video" title="Toggle Video">📹</button>
+                            <button id="toggle-audio" class="btn-video" title="Toggle Audio">🎤</button>
+                        </div>
+                    </div>
+                </div>
+                
+                <div id="messages-container">
+                    <div id="messages-list"></div>
+                </div>
+                
+                <div class="message-input-container">
+                    <input 
+                        type="text" 
+                        id="message-input" 
+                        placeholder="Type a message..." 
+                        maxlength="5000"
+                        autocomplete="off"
+                    >
+                    <button id="send-btn" class="btn-send">Send</button>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Settings Modal -->
+        <div id="settings-modal" class="modal">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h2>Settings</h2>
+                    <button class="btn-close" id="close-settings-btn">×</button>
+                </div>
+                <div class="modal-body">
+                    <div class="setting-group">
+                        <label>
+                            <input type="checkbox" id="enable-video" checked>
+                            Enable Video
+                        </label>
+                    </div>
+                    <div class="setting-group">
+                        <label>
+                            <input type="checkbox" id="enable-audio" checked>
+                            Enable Audio
+                        </label>
+                    </div>
+                    <div class="setting-group">
+                        <label>
+                            <input type="checkbox" id="play-sounds">
+                            Play notification sounds
+                        </label>
+                    </div>
+                    <div class="setting-group">
+                        <label for="theme-select">Theme</label>
+                        <select id="theme-select">
+                            <option value="dark">Dark</option>
+                            <option value="light">Light</option>
+                            <option value="auto">Auto</option>
+                        </select>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Connection Status Toast -->
+        <div id="toast" class="toast"></div>
+    </div>
+    
+    <script type="module" src="js/app.js"></script>
+</body>
+</html>

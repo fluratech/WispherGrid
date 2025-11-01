@@ -373,8 +373,10 @@ class WispherGrid {
                     break;
                     
                 case 'ice-candidate':
-                    // Add ICE candidate
-                    await this.webrtc.addIceCandidate(peerId, data);
+                    // Add ICE candidate (data is already a plain object)
+                    if (data && data.candidate) {
+                        await this.webrtc.addIceCandidate(peerId, data);
+                    }
                     break;
             }
         } catch (error) {

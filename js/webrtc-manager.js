@@ -86,8 +86,28 @@ export class WebRTCManager {
             const state = pc.connectionState;
             this.onConnectionStateChange?.(peerId, state);
             
-            if (state === 'failed' || state === 'disconnected') {
-                this.closePeerConnection(peerId);
+            // Don't auto-close on disconnected - let the app handle reconnection
+            if (state === 'failed') {
+                console.warn(`Connection failed for peer ${peerId}`);
+                // Don't close immediately, let app handle it
+            }
+        };
+
+        // Handle ICE connection state
+        pc.oniceconnectionstatechange = () => {
+            const iceState = pc.iceConnectionState;
+            console.log(`ICE connection state for ${peerId}: ${iceState}`);
+            
+            if (iceState === 'failed') {
+                console.warn(`ICE failed for peer ${peerId}, attempting restart...`);
+                // Try to restart ICE if possible
+                if (pc.signalingState !== 'closed' && pc.signalingState !== 'stable') {
+                    try {
+                        pc.restartIce();
+                    } catch (error) {
+                        console.error('Error restarting ICE:', error);
+                    }
+                }
             }
         };
 

@@ -1,8 +1,10 @@
 /**
  * Room Manager
- * Handles room creation, peer discovery, and signaling using WebRTC data channels
- * Uses a simple signaling mechanism through shared room identifiers
+ * Handles room creation, peer discovery, and signaling
+ * Uses WebSocket for cross-device, BroadcastChannel as fallback
  */
+
+import { WebSocketSignaling } from './signaling-websocket.js';
 
 export class RoomManager {
     constructor() {
@@ -64,14 +66,88 @@ export class RoomManager {
 
     /**
      * Create a signaling connection for peer discovery
-     * This is a simplified approach using BroadcastChannel API for same-origin peers
-     * and WebRTC data channels for cross-origin connections
+     * Tries WebSocket first (for cross-device), falls back to BroadcastChannel (same-origin)
      */
     initializeSignaling(onPeerJoined, onPeerLeft, onSignal) {
         if (!this.roomId) throw new Error('No room joined');
 
-        // Use BroadcastChannel for same-tab/window signaling (for demo purposes)
-        // In production, you might use WebSocket or other signaling servers
+        // Try WebSocket signaling first (for cross-device support)
+        const wsUrl = this.getSignalingServerUrl();
+        this.wsSignaling = new WebSocketSignaling(wsUrl);
+        
+        const wsConnected = this.wsSignaling.connect(this.roomId, this.userId, (message) => {
+            this.handleWebSocketMessage(message, onPeerJoined, onPeerLeft, onSignal);
+        });
+
+        if (wsConnected) {
+            this.useWebSocket = true;
+            console.log('Using WebSocket signaling (cross-device support)');
+            return;
+        }
+
+        // Fallback to BroadcastChannel (same-origin only)
+        console.log('WebSocket unavailable, using BroadcastChannel (same-device only)');
+        this.useWebSocket = false;
+        this.initializeBroadcastChannel(onPeerJoined, onPeerLeft, onSignal);
+    }
+
+    /**
+     * Get signaling server URL
+     */
+    getSignalingServerUrl() {
+        // Check for custom server URL in URL params or localStorage
+        const urlParams = new URLSearchParams(window.location.search);
+        const customUrl = urlParams.get('ws') || localStorage.getItem('wisphergrid_ws_url');
+        
+        if (customUrl) {
+            return customUrl;
+        }
+
+        // Auto-detect: use same host, port 8080
+        const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+        const host = window.location.hostname;
+        return `${protocol}//${host}:8080`;
+    }
+
+    /**
+     * Handle WebSocket messages
+     */
+    handleWebSocketMessage(message, onPeerJoined, onPeerLeft, onSignal) {
+        const { type, from, data } = message;
+        
+        if (from === this.userId) return;
+        
+        switch (type) {
+            case 'peer-joined':
+                this.handlePeerJoin(from, data || {}, onPeerJoined);
+                break;
+            case 'peer-left':
+                this.handlePeerLeave(from, onPeerLeft);
+                break;
+            case 'existing-peers':
+                // Handle list of existing peers when joining
+                if (data && data.peers && Array.isArray(data.peers)) {
+                    data.peers.forEach(peer => {
+                        if (peer.userId !== this.userId) {
+                            this.handlePeerJoin(peer.userId, { username: peer.username }, onPeerJoined);
+                        }
+                    });
+                }
+                break;
+            case 'offer':
+            case 'answer':
+            case 'ice-candidate':
+                onSignal?.(from, type, data);
+                break;
+            default:
+                break;
+        }
+    }
+
+    /**
+     * Initialize BroadcastChannel (fallback for same-origin)
+     */
+    initializeBroadcastChannel(onPeerJoined, onPeerLeft, onSignal) {
         const channelName = `wisphergrid_${this.roomId}`;
         
         try {
@@ -80,7 +156,7 @@ export class RoomManager {
             this.broadcastChannel.onmessage = (event) => {
                 const { type, from, data } = event.data;
                 
-                if (from === this.userId) return; // Ignore own messages
+                if (from === this.userId) return;
                 
                 switch (type) {
                     case 'join':
@@ -95,10 +171,8 @@ export class RoomManager {
                         onSignal?.(from, type, data);
                         break;
                     case 'ping':
-                        // Ignore ping messages (used for presence)
                         break;
                     default:
-                        // Silently ignore unknown types to avoid console spam
                         break;
                 }
             };
@@ -123,9 +197,7 @@ export class RoomManager {
             }, 5000);
 
         } catch (error) {
-            console.error('BroadcastChannel not supported, using fallback:', error);
-            // Fallback: use URL hash for simple signaling
-            this.useHashSignaling(onSignal);
+            console.error('BroadcastChannel not supported:', error);
         }
     }
 
@@ -165,7 +237,16 @@ export class RoomManager {
      * Send signaling message to peer
      */
     sendSignal(peerId, type, data) {
-        if (this.broadcastChannel) {
+        if (this.useWebSocket && this.wsSignaling) {
+            // Send via WebSocket
+            this.wsSignaling.send({
+                type: 'signal',
+                to: peerId,
+                signalType: type,
+                data: data
+            });
+        } else if (this.broadcastChannel) {
+            // Send via BroadcastChannel
             this.broadcastChannel.postMessage({
                 type,
                 from: this.userId,
@@ -203,20 +284,26 @@ export class RoomManager {
      * Cleanup signaling
      */
     cleanupSignaling() {
+        if (this.wsSignaling) {
+            this.wsSignaling.disconnect();
+            this.wsSignaling = null;
+        }
+        
         if (this.broadcastChannel) {
             this.broadcastChannel.postMessage({
                 type: 'leave',
                 from: this.userId
             });
             this.broadcastChannel.close();
+            this.broadcastChannel = null;
         }
         
         if (this.presenceInterval) {
             clearInterval(this.presenceInterval);
+            this.presenceInterval = null;
         }
         
-        this.signalingConnections.forEach(conn => conn.close());
-        this.signalingConnections.clear();
+        this.useWebSocket = false;
     }
 
     /**

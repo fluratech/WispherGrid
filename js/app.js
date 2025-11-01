@@ -293,17 +293,29 @@ class WispherGrid {
         this.connectedPeers.set(peerId, {
             username: data.username || 'Unknown',
             connectedAt: Date.now(),
-            connected: false
+            connected: false,
+            connecting: false
         });
 
         this.ui.displaySystemMessage(`${data.username || 'Someone'} joined`);
         this.updatePeerCount();
 
+        // Prevent duplicate connection attempts
+        if (this.connectedPeers.get(peerId)?.connecting) {
+            return;
+        }
+        
+        this.connectedPeers.get(peerId).connecting = true;
+
         // Create peer connection for data channel (text messaging)
         // Media will be added when video call starts
-        const isInitiator = this.room.userId.localeCompare(peerId) > 0;
+        // Use consistent initiator selection (lower user ID initiates)
+        const isInitiator = this.room.userId.localeCompare(peerId) < 0;
         
         try {
+            // Small delay to prevent race conditions with multiple peers
+            await new Promise(resolve => setTimeout(resolve, Math.random() * 100));
+            
             await this.webrtc.createPeerConnection(peerId, isInitiator);
 
             if (isInitiator) {
@@ -315,6 +327,7 @@ class WispherGrid {
         } catch (error) {
             console.error('Error creating peer connection:', error);
             this.ui.showToast('Failed to connect to peer', 'error');
+            this.connectedPeers.get(peerId).connecting = false;
         }
     }
 

@@ -7,8 +7,8 @@ from flask_socketio import SocketIO, emit, join_room, leave_room, close_room
 app = Flask(__name__)
 # Remember to change this key!
 app.config['SECRET_KEY'] = 'your-super-secret-key-for-hackathon' 
-# Tell SocketIO to use gevent for its async mode
-socketio = SocketIO(app, async_mode='gevent', cors_allowed_origins="*")
+# Tell SocketIO to use eventlet for its async mode
+socketio = SocketIO(app, async_mode='eventlet', cors_allowed_origins="*")
 
 # --- V3: User Directory ---
 # This dictionary maps a user's chosen, unique username to their current session ID.
@@ -126,6 +126,6 @@ if __name__ == '__main__':
     print("Starting Flask-SocketIO server on http://0.0.0.0:5000")
     # Make sure to run this with `python app.py`
     # You will need to have Flask and Flask-SocketIO installed:
-    # pip install Flask Flask-SocketIO
+    # pip install Flask Flask-SocketIO eventlet
     socketio.run(app, debug=True, host='0.0.0.0', port=5000)
 

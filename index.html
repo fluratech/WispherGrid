@@ -69,12 +69,15 @@
                         <h2 id="room-name-display">Room</h2>
                         <p id="peer-count">Connecting...</p>
                     </div>
-                    <button id="settings-btn" class="btn-icon" title="Settings">⚙️</button>
+                    <div class="header-actions">
+                        <button id="connection-status-btn" class="btn-icon" title="Connection Status">🔗</button>
+                        <button id="settings-btn" class="btn-icon" title="Settings">⚙️</button>
+                    </div>
                 </header>
                 
-                <div id="media-container">
-                    <div id="remote-videos"></div>
-                    <div id="local-video-wrapper">
+                <div id="media-container" class="compact-videos">
+                    <div id="remote-videos" class="remote-videos-grid"></div>
+                    <div id="local-video-wrapper" class="local-video-compact">
                         <video id="local-video" autoplay muted playsinline></video>
                         <div class="video-controls">
                             <button id="toggle-video" class="btn-video" title="Toggle Video">📹</button>
@@ -88,6 +91,7 @@
                 </div>
                 
                 <div class="message-input-container">
+                    <button id="attach-btn" class="btn-attach" title="Attach file">📎</button>
                     <input 
                         type="text" 
                         id="message-input" 
@@ -95,7 +99,25 @@
                         maxlength="5000"
                         autocomplete="off"
                     >
+                    <input type="file" id="file-input" style="display: none;" multiple>
                     <button id="send-btn" class="btn-send">Send</button>
+                </div>
+                
+                <!-- Connection Status / Manual Signaling -->
+                <div id="connection-status" class="connection-status hidden">
+                    <div class="connection-content">
+                        <h3>Connect Another Device</h3>
+                        <p>Share this room code or scan QR code:</p>
+                        <div class="room-code-display" id="room-code-display"></div>
+                        <div id="qr-code-container"></div>
+                        <div class="signaling-section">
+                            <h4>Manual Connection (if automatic fails):</h4>
+                            <button id="copy-offer-btn" class="btn-copy">Copy Connection Info</button>
+                            <textarea id="paste-signal-input" placeholder="Paste connection info from other device..." rows="3"></textarea>
+                            <button id="paste-signal-btn" class="btn-paste">Connect</button>
+                        </div>
+                        <button id="close-connection-status" class="btn-close-status">Close</button>
+                    </div>
                 </div>
             </div>
         </div>

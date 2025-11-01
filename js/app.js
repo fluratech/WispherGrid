@@ -37,6 +37,14 @@ class WispherGrid {
             (enabled) => this.toggleAudio(enabled)
         );
 
+        // Setup file and connection callbacks
+        this.ui.setFileCallbacks(
+            (file) => this.handleFileSelected(file),
+            () => this.showConnectionStatus(),
+            () => this.copyConnectionInfo(),
+            (signalData) => this.processManualSignal(signalData)
+        );
+
         // Check for room in URL
         const urlRoomId = RoomManager.parseRoomFromUrl();
         if (urlRoomId) {
@@ -272,6 +280,147 @@ class WispherGrid {
                 message.timestamp || Date.now(),
                 false
             );
+        } else if (message.type === 'file') {
+            const peerInfo = this.connectedPeers.get(peerId);
+            this.handleFileReceived(
+                message.username || peerInfo?.username || 'Unknown',
+                message.fileName,
+                message.fileSize,
+                message.fileData,
+                message.timestamp || Date.now()
+            );
+        }
+    }
+
+    /**
+     * Handle file selected for sharing
+     */
+    async handleFileSelected(file) {
+        if (file.size > 100 * 1024 * 1024) { // 100MB limit
+            this.ui.showToast('File too large (max 100MB)', 'error');
+            return;
+        }
+
+        try {
+            const fileData = await this.readFileAsBase64(file);
+            const fileMessage = {
+                type: 'file',
+                username: this.username,
+                fileName: file.name,
+                fileSize: file.size,
+                fileData: fileData,
+                timestamp: Date.now()
+            };
+
+            // Broadcast to all peers
+            this.webrtc.broadcastMessage(fileMessage);
+
+            // Display own file message
+            this.ui.displayFileMessage(
+                this.username,
+                file.name,
+                file.size,
+                fileData,
+                Date.now(),
+                true,
+                (fileName, data) => this.downloadFile(fileName, data)
+            );
+        } catch (error) {
+            console.error('Error reading file:', error);
+            this.ui.showToast('Error reading file', 'error');
+        }
+    }
+
+    /**
+     * Read file as base64
+     */
+    readFileAsBase64(file) {
+        return new Promise((resolve, reject) => {
+            const reader = new FileReader();
+            reader.onload = () => {
+                const base64 = reader.result.split(',')[1];
+                resolve(base64);
+            };
+            reader.onerror = reject;
+            reader.readAsDataURL(file);
+        });
+    }
+
+    /**
+     * Handle received file
+     */
+    handleFileReceived(username, fileName, fileSize, fileData, timestamp) {
+        this.ui.displayFileMessage(
+            username,
+            fileName,
+            fileSize,
+            fileData,
+            timestamp,
+            false,
+            (fileName, data) => this.downloadFile(fileName, data)
+        );
+    }
+
+    /**
+     * Download file
+     */
+    downloadFile(fileName, base64Data) {
+        const byteCharacters = atob(base64Data);
+        const byteNumbers = new Array(byteCharacters.length);
+        for (let i = 0; i < byteCharacters.length; i++) {
+            byteNumbers[i] = byteCharacters.charCodeAt(i);
+        }
+        const byteArray = new Uint8Array(byteNumbers);
+        const blob = new Blob([byteArray]);
+        
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = fileName;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+    }
+
+    /**
+     * Show connection status modal
+     */
+    showConnectionStatus() {
+        if (this.room.roomId) {
+            this.ui.showConnectionStatus(this.room.roomId);
+        }
+    }
+
+    /**
+     * Copy connection info for manual signaling
+     */
+    copyConnectionInfo() {
+        // Generate current connection state for manual copy-paste
+        const connectionInfo = {
+            roomId: this.room.roomId,
+            userId: this.room.userId,
+            username: this.username,
+            timestamp: Date.now()
+        };
+        const infoText = JSON.stringify(connectionInfo);
+        this.ui.copyConnectionInfo(infoText);
+    }
+
+    /**
+     * Process manual signal paste
+     */
+    processManualSignal(signalData) {
+        try {
+            const parsed = JSON.parse(signalData);
+            if (parsed.roomId === this.room.roomId && parsed.userId !== this.room.userId) {
+                // Same room, different user - try to connect
+                this.handlePeerJoin(parsed.userId, { username: parsed.username });
+            } else {
+                this.ui.showToast('Invalid connection info', 'error');
+            }
+        } catch (error) {
+            this.ui.showToast('Invalid connection format', 'error');
         }
     }
 

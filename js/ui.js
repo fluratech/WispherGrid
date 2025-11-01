@@ -9,7 +9,7 @@ export class UIManager {
             enableVideo: true,
             enableAudio: true,
             playSounds: false,
-            theme: 'dark'
+            theme: 'light'
         };
         this.loadSettings();
         this.applyTheme();
@@ -148,8 +148,80 @@ export class UIManager {
             this.saveSettings();
         });
 
+        // File sharing
+        const attachBtn = document.getElementById('attach-btn');
+        const fileInput = document.getElementById('file-input');
+        
+        attachBtn.addEventListener('click', () => {
+            fileInput.click();
+        });
+        
+        fileInput.addEventListener('change', (e) => {
+            const files = Array.from(e.target.files);
+            files.forEach(file => {
+                if (window.onFileSelected) {
+                    window.onFileSelected(file);
+                }
+            });
+            fileInput.value = ''; // Reset input
+        });
+
+        // Connection status UI
+        const connectionStatusBtn = document.getElementById('connection-status-btn');
+        const connectionStatus = document.getElementById('connection-status');
+        const closeConnectionStatus = document.getElementById('close-connection-status');
+        
+        if (connectionStatusBtn) {
+            connectionStatusBtn.addEventListener('click', () => {
+                connectionStatus.classList.remove('hidden');
+                if (window.onShowConnectionStatus) {
+                    window.onShowConnectionStatus();
+                }
+            });
+        }
+        
+        if (closeConnectionStatus) {
+            closeConnectionStatus.addEventListener('click', () => {
+                connectionStatus.classList.add('hidden');
+            });
+        }
+
+        // Manual signaling
+        const copyOfferBtn = document.getElementById('copy-offer-btn');
+        const pasteSignalBtn = document.getElementById('paste-signal-btn');
+        const pasteSignalInput = document.getElementById('paste-signal-input');
+        
+        if (copyOfferBtn) {
+            copyOfferBtn.addEventListener('click', () => {
+                if (window.onCopyConnectionInfo) {
+                    window.onCopyConnectionInfo();
+                }
+            });
+        }
+        
+        if (pasteSignalBtn && pasteSignalInput) {
+            pasteSignalBtn.addEventListener('click', () => {
+                const signalData = pasteSignalInput.value.trim();
+                if (signalData && window.onPasteConnectionInfo) {
+                    window.onPasteConnectionInfo(signalData);
+                    pasteSignalInput.value = '';
+                }
+            });
+        }
+
         // Load room from URL if present
         this.checkUrlForRoom(roomInput);
+    }
+
+    /**
+     * Set callbacks for file and connection operations
+     */
+    setFileCallbacks(onFileSelected, onShowConnectionStatus, onCopyConnectionInfo, onPasteConnectionInfo) {
+        // These will be called from the UI event listeners above
+        window.onFileSelected = onFileSelected;
+        window.onShowConnectionStatus = onShowConnectionStatus;
+        window.onCopyConnectionInfo = onCopyConnectionInfo;
+        window.onPasteConnectionInfo = onPasteConnectionInfo;
     }
 
     /**
@@ -220,6 +292,104 @@ export class UIManager {
         // Play sound if enabled
         if (this.settings.playSounds && !isOwn) {
             this.playNotificationSound();
+        }
+    }
+
+    /**
+     * Display a file message
+     */
+    displayFileMessage(username, fileName, fileSize, fileData, timestamp, isOwn = false, onDownload) {
+        const messagesList = document.getElementById('messages-list');
+        const messageEl = document.createElement('div');
+        messageEl.className = `message ${isOwn ? 'own' : 'other'}`;
+        
+        const time = new Date(timestamp).toLocaleTimeString([], { 
+            hour: '2-digit', 
+            minute: '2-digit' 
+        });
+
+        const sizeStr = this.formatFileSize(fileSize);
+        const icon = this.getFileIcon(fileName);
+
+        messageEl.innerHTML = `
+            <div class="message-header">
+                <span class="message-author">${this.escapeHtml(username)}</span>
+            </div>
+            <div class="message-body">
+                <div class="message-file" data-action="download">
+                    <div class="message-file-icon">${icon}</div>
+                    <div class="message-file-info">
+                        <div class="message-file-name">${this.escapeHtml(fileName)}</div>
+                        <div class="message-file-size">${sizeStr}</div>
+                    </div>
+                </div>
+            </div>
+            <div class="message-time">${time}</div>
+        `;
+
+        // Add download handler
+        if (onDownload && fileData) {
+            const fileElement = messageEl.querySelector('.message-file');
+            fileElement.addEventListener('click', () => {
+                onDownload(fileName, fileData);
+            });
+            fileElement.style.cursor = 'pointer';
+        }
+
+        messagesList.appendChild(messageEl);
+        messagesList.scrollTop = messagesList.scrollHeight;
+
+        if (this.settings.playSounds && !isOwn) {
+            this.playNotificationSound();
+        }
+    }
+
+    /**
+     * Format file size
+     */
+    formatFileSize(bytes) {
+        if (bytes === 0) return '0 Bytes';
+        const k = 1024;
+        const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+        const i = Math.floor(Math.log(bytes) / Math.log(k));
+        return Math.round(bytes / Math.pow(k, i) * 100) / 100 + ' ' + sizes[i];
+    }
+
+    /**
+     * Get file icon based on extension
+     */
+    getFileIcon(fileName) {
+        const ext = fileName.split('.').pop().toLowerCase();
+        const icons = {
+            'pdf': '📄',
+            'doc': '📝', 'docx': '📝',
+            'xls': '📊', 'xlsx': '📊',
+            'jpg': '🖼️', 'jpeg': '🖼️', 'png': '🖼️', 'gif': '🖼️',
+            'mp4': '🎥', 'mov': '🎥', 'avi': '🎥',
+            'mp3': '🎵', 'wav': '🎵',
+            'zip': '📦', 'rar': '📦',
+        };
+        return icons[ext] || '📎';
+    }
+
+    /**
+     * Show connection status with room code
+     */
+    showConnectionStatus(roomId) {
+        const roomCodeDisplay = document.getElementById('room-code-display');
+        roomCodeDisplay.textContent = roomId;
+    }
+
+    /**
+     * Copy connection info to clipboard
+     */
+    async copyConnectionInfo(infoText) {
+        try {
+            await navigator.clipboard.writeText(infoText);
+            this.showToast('Connection info copied!', 'success');
+        } catch (error) {
+            console.error('Failed to copy:', error);
+            this.showToast('Failed to copy', 'error');
         }
     }
 

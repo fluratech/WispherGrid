@@ -103,7 +103,15 @@ export class RoomManager {
             return customUrl;
         }
 
-        // Auto-detect: use same host, port 8080
+        // For GitHub Pages: Return null (will use BroadcastChannel fallback)
+        // User needs to deploy signaling server separately and set URL
+        if (window.location.hostname.includes('github.io') || 
+            window.location.hostname.includes('github.com')) {
+            console.warn('GitHub Pages detected - signaling server needed for cross-device. Set ?ws=wss://your-server.com');
+            return null; // Will fallback to BroadcastChannel
+        }
+
+        // Local development: try same host, port 8080
         const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
         const host = window.location.hostname;
         return `${protocol}//${host}:8080`;

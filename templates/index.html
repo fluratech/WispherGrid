@@ -5,7 +5,6 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>WispherGrid - Peer to Peer - secure chat</title>
     <script src="https://cdn.tailwindcss.com"></script>
-    <!-- Use Socket.IO 4.7.5 client -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.7.5/socket.io.min.js"></script>
     <style>
         /* Updated Theme */
@@ -23,11 +22,9 @@
         .self .chat-audio { filter: sepia(30%) saturate(70%) hue-rotate(180deg) brightness(100%) contrast(90%); }
     </style>
 </head>
-<body class="bg-gray-100 text-gray-900 h-full flex items-center justify-center p-4">
+<body class="bg-gray-100 text-gray-900 h-full md:flex md:items-center md:justify-center md:p-4">
 
-    <!-- Login Modal -->
-    <div id="username-modal" class="fixed inset-0 bg-gray-900 bg-opacity-75 flex items-center justify-center z-50">
-        <div class="bg-white rounded-lg shadow-xl p-6 max-w-sm w-full">
+    <div id="username-modal" class="fixed inset-0 bg-gray-900 bg-opacity-75 flex items-center justify-center z-50 p-4"> <div class="bg-white rounded-lg shadow-xl p-6 max-w-sm w-full">
             <h3 class="text-xl font-bold text-center mb-4">Choose your Username</h3>
             <form id="login-form">
                 <input type="text" id="username-input" placeholder="Enter your name..." required
@@ -40,9 +37,7 @@
         </div>
     </div>
 
-    <!-- Search Modal -->
-    <div id="search-modal" class="fixed inset-0 bg-gray-900 bg-opacity-75 flex items-center justify-center z-40 hidden">
-        <div class="bg-white rounded-lg shadow-xl p-6 max-w-sm w-full h-[70vh] flex flex-col">
+    <div id="search-modal" class="fixed inset-0 bg-gray-900 bg-opacity-75 flex items-center justify-center z-40 hidden p-4"> <div class="bg-white rounded-lg shadow-xl p-6 max-w-sm w-full h-[70vh] flex flex-col">
             <div class="flex justify-between items-center mb-4">
                 <h3 class="text-xl font-bold">Find New Users</h3>
                 <button id="close-search-btn" class="text-gray-400 hover:text-gray-600">
@@ -52,20 +47,27 @@
             <input type="text" id="search-input" placeholder="Search all online users..."
                    class="w-full px-4 py-2 border border-gray-300 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-blue-500">
             <div id="search-results" class="flex-grow overflow-y-auto mt-4 space-y-1">
-                <!-- Search results will be populated here -->
-            </div>
+                </div>
         </div>
     </div>
 
+    <div id="sidebar-overlay" class="fixed inset-0 bg-black bg-opacity-50 z-10 hidden md:hidden"></div>
 
-    <!-- Main App Container -->
-    <div id="app-container" class="w-full max-w-4xl h-[90vh] max-h-[800px] bg-white rounded-xl shadow-2xl flex hidden">
-        <aside class="w-1/3 min-w-[250px] bg-gray-50 border-r border-gray-200 rounded-l-xl flex flex-col">
+    <div id="app-container" class="relative w-full h-full bg-white flex hidden overflow-hidden md:w-full md:max-w-4xl md:h-[90vh] md:max-h-[800px] md:rounded-xl md:shadow-2xl">
+        
+        <aside id="sidebar" class="absolute z-20 h-full w-full max-w-xs bg-gray-50 border-r border-gray-200 flex flex-col transform -translate-x-full transition-transform duration-300 md:relative md:z-auto md:w-1/3 md:min-w-[250px] md:translate-x-0 md:rounded-l-xl">
             <header class="p-4 border-b border-gray-200">
-                <h1 class="text-xl font-bold text-blue-600">WispherGrid</h1>
-                <div class="mt-2 text-xs">
-                    <span class="font-medium">Your ID:</span>
-                    <span id="my-user-id" class="text-gray-600">Connecting...</span>
+                <div class="flex justify-between items-center">
+                    <div>
+                        <h1 class="text-xl font-bold text-blue-600">WispherGrid</h1>
+                        <div class="mt-2 text-xs">
+                            <span class="font-medium">Your ID:</span>
+                            <span id="my-user-id" class="text-gray-600">Connecting...</span>
+                        </div>
+                    </div>
+                    <button id="close-sidebar-btn" class="p-1 text-gray-500 hover:text-gray-800 md:hidden">
+                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-6 h-6"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
+                    </button>
                 </div>
                 <button id="logout-btn" class="mt-2 text-xs text-red-500 hover:underline">Logout</button>
             </header>
@@ -80,29 +82,39 @@
             </div>
         </aside>
 
-        <!-- LAYOUT FIX: Added overflow-hidden to prevent main area from stretching -->
-        <main id="chat-app" class="w-2/3 flex-grow flex flex-col overflow-hidden">
-            <div id="chat-placeholder" class="flex-grow flex flex-col items-center justify-center text-gray-500">
-                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-24 h-24 text-gray-300">
-                    <path stroke-linecap="round" stroke-linejoin="round" d="M8.625 12a.375.375 0 11-.75 0 .375.375 0 01.75 0zm0 0H8.25m4.125 0a.375.375 0 11-.75 0 .375.375 0 01.75 0zm0 0H12m4.125 0a.375.375 0 11-.75 0 .375.375 0 01.75 0zm0 0h-.375M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                </svg>
-                <p class="mt-4 text-lg">Select a user to start a secure chat.</p>
-                <p class="text-sm">Messages are end-to-end encrypted.</p>
+        <main id="chat-app" class="w-full flex-grow flex flex-col overflow-hidden md:w-2/3">
+            <div id="chat-placeholder" class="flex-grow flex flex-col items-center justify-start text-gray-500 md:justify-center">
+                <header class="bg-gray-50 text-gray-800 p-3 w-full flex items-center border-b border-gray-200 md:hidden">
+                    <button id="hamburger-btn-placeholder" class="p-1 text-gray-500 hover:text-gray-800">
+                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-6 h-6"><path stroke-linecap="round" stroke-linejoin="round" d="M3.75 6.75h16.5M3.75 12h16.5m-16.5 5.25h16.5" /></svg>
+                    </button>
+                    <h2 class="text-lg font-bold ml-2">WispherGrid</h2>
+                </header>
+                <div class="flex-grow flex flex-col items-center justify-center text-gray-500 px-4 text-center">
+                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-24 h-24 text-gray-300">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M8.625 12a.375.375 0 11-.75 0 .375.375 0 01.75 0zm0 0H8.25m4.125 0a.375.375 0 11-.75 0 .375.375 0 01.75 0zm0 0H12m4.125 0a.375.375 0 11-.75 0 .375.375 0 01.75 0zm0 0h-.375M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
+                    <p class="mt-4 text-lg">Select a user to start a secure chat.</p>
+                    <p class="text-sm">Messages are end-to-end encrypted.</p>
+                </div>
             </div>
 
-            <!-- LAYOUT FIX: Added 'flex' and 'overflow-hidden' -->
             <div id="active-chat" class="flex flex-grow flex-col hidden overflow-hidden">
                 <header class="bg-gray-50 text-gray-800 p-3 flex justify-between items-center border-b border-gray-200">
-                    <div>
-                        <h2 class="text-lg font-bold" id="peer-name"></h2>
-                        <p class="text-sm text-gray-500" id="status">Not connected</p>
-                        <p class="text-sm h-4 text-blue-600" id="typing-status"></p>
+                    <div class="flex items-center gap-2">
+                        <button id="hamburger-btn" class="p-1 text-gray-500 hover:text-gray-800 md:hidden">
+                            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-6 h-6"><path stroke-linecap="round" stroke-linejoin="round" d="M3.75 6.75h16.5M3.75 12h16.5m-16.5 5.25h16.5" /></svg>
+                        </button>
+                        <div>
+                            <h2 class="text-lg font-bold" id="peer-name"></h2>
+                            <p class="text-sm text-gray-500" id="status">Not connected</p>
+                            <p class="text-sm h-4 text-blue-600" id="typing-status"></p>
+                        </div>
                     </div>
                     <div>
-                        <!-- V5: Added recording status -->
                         <span id="recording-status" class="text-sm text-red-500 mr-4 hidden">Recording...</span>
                         <button id="call-btn" class="text-sm text-blue-500 hover:text-blue-700 hover:underline font-medium px-3 py-1 rounded border border-blue-500 hidden">
-                            Call
+                            Connect
                         </button>
                         <button id="hang-up-btn" class="text-sm text-red-500 hover:text-red-700 hover:underline font-medium px-3 py-1 rounded border border-red-500 hidden">
                             Hang Up
@@ -112,32 +124,34 @@
 
                 <div id="messages" class="flex-grow p-4 space-y-3 overflow-y-auto bg-white" aria-live="polite"></div>
 
-                <!-- V5: Modified message form -->
-                <form id="message-form" class="p-3 bg-gray-100 flex gap-2 items-center border-t border-gray-200">
+               <form id="message-form" class="p-1.5 bg-gray-100 flex gap-1 items-center border-t border-gray-200">
                     
-                    <label id="file-btn-label" class="p-2 text-gray-500 hover:text-blue-500 cursor-pointer rounded-full hover:bg-gray-200 disabled:opacity-50 disabled:cursor-not-allowed">
+                    <label id="file-btn-label" class="p-1 text-gray-500 hover:text-blue-500 cursor-pointer rounded-full hover:bg-gray-200 disabled:opacity-50 disabled:cursor-not-allowed">
                         <input type="file" id="file-input" class="hidden" disabled>
-                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-6 h-6"><path stroke-linecap="round" stroke-linejoin="round" d="M18.375 12.739l-7.693 7.693a4.5 4.5 0 01-6.364-6.364l10.94-10.94A3 3 0 1119.5 7.372L8.552 18.32m.009-.01l-.01.01m5.699-9.941l-7.81 7.81a1.5 1.5 0 002.122 2.122l7.81-7.81" /></svg>
+                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-5 h-5"><path stroke-linecap="round" stroke-linejoin="round" d="M18.375 12.739l-7.693 7.693a4.5 4.5 0 01-6.364-6.364l10.94-10.94A3 3 0 1119.5 7.372L8.552 18.32m.009-.01l-.01.01m5.699-9.941l-7.81 7.81a1.5 1.5 0 002.122 2.122l7.81-7.81" /></svg>
                     </label>
 
-                    <input type="text" id="message-input" placeholder="Type an encrypted message..." autocomplete="off" required disabled
-                           class="flex-grow px-4 py-2 border border-gray-300 rounded-full bg-white focus:outline-none focus:ring-2 focus:ring-blue-500">
+                    <!-- MODIFIED: px-3 for less horizontal padding -->
+                    <input type="text" id="message-input" placeholder="Type..." autocomplete="off" required disabled
+                        class="flex-grow px-3 py-2 border border-gray-300 rounded-full bg-white focus:outline-none focus:ring-2 focus:ring-blue-400">
                     
+                    <!-- MODIFIED: p-1.5 and w-5 h-5 icon -->
                     <button type="button" id="record-btn" disabled
-                            class="p-2 text-gray-500 hover:text-blue-500 rounded-full hover:bg-gray-200 disabled:opacity-50 disabled:cursor-not-allowed">
-                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-6 h-6"><path stroke-linecap="round" stroke-linejoin="round" d="M12 18.75a.75.75 0 00.75-.75v-6a.75.75 0 00-1.5 0v6a.75.75 0 00.75.75zM19.5 12a7.5 7.5 0 11-15 0 7.5 7.5 0 0115 0z" /></svg>
+                            class="p-1.5 text-gray-500 hover:text-blue-500 rounded-full hover:bg-gray-200 disabled:opacity-50 disabled:cursor-not-allowed">
+                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-5 h-5"><path stroke-linecap="round" stroke-linejoin="round" d="M12 18.75a.75.75 0 00.75-.75v-6a.75.75 0 00-1.5 0v6a.75.75 0 00.75.75zM19.5 12a7.5 7.5 0 11-15 0 7.5 7.5 0 0115 0z" /></svg>
                     </button>
 
+                    <!-- MODIFIED: w-9 h-9 to make it smaller -->
                     <button type="submit" id="send-button" disabled
-                            class="bg-blue-500 text-white p-2 rounded-full w-10 h-10 flex-shrink-0 flex items-center justify-center hover:bg-blue-600 disabled:opacity-50 disabled:cursor-not-allowed">
+                            class="bg-blue-500 text-white p-2 rounded-full w-9 h-9 flex-shrink-0 flex items-center justify-center hover:bg-blue-600 disabled:opacity-50 disabled:cursor-not-allowed">
                         <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" class="w-5 h-5"><path d="M3.105 3.105a.5.5 0 01.815-.39l11.028 4.901a.5.5 0 010 .878l-11.028 4.901a.5.5 0 01-.815-.39V3.105z" /></svg>
                     </button>
                 </form>
+
             </div>
         </main>
     </div>
 
-    <!-- Incoming Call Modal -->
     <div id="incoming-call-modal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 hidden">
         <div class="bg-white rounded-lg shadow-xl p-6 max-w-sm w-full text-center">
             <h3 class="text-lg font-bold">Incoming Call</h3>
@@ -167,6 +181,14 @@
     const searchInput = $('#search-input');
     const searchResults = $('#search-results');
     
+    // --- ADDED: Mobile UI Elements ---
+    const sidebar = $('#sidebar');
+    const sidebarOverlay = $('#sidebar-overlay');
+    const hamburgerBtn = $('#hamburger-btn');
+    const hamburgerBtnPlaceholder = $('#hamburger-btn-placeholder');
+    const closeSidebarBtn = $('#close-sidebar-btn');
+    // --- END: Mobile UI Elements ---
+
     // App
     const myUserIDElement = $('#my-user-id');
     const userListElement = $('#user-list');
@@ -202,7 +224,7 @@
     let callTimeout = null; 
 
     let myUserID = null; 
-    let mySID = null;    
+    let mySID = null;   
     let currentPeerID = null;
     let currentPeerSID = null;
     let incomingCallData = null; 
@@ -224,10 +246,21 @@
     const CHUNK_SIZE = 65536; // 64KB
 
     // --- Config ---
-    // This is the change! An empty string tells Socket.IO to connect
-    // to the same server that served this HTML file.
     const SIGNALING_SERVER_URL = ''; 
     const STUN_SERVERS = { iceServers: [{ urls: 'stun:stun.l.google.com:19302' }] };
+
+    // --- ADDED: Mobile UI ---
+    function openSidebar() {
+        sidebar.classList.remove('-translate-x-full');
+        sidebarOverlay.classList.remove('hidden');
+    }
+
+    function closeSidebar() {
+        sidebar.classList.add('-translate-x-full');
+        sidebarOverlay.classList.add('hidden');
+    }
+    // --- END: Mobile UI ---
+
 
     // --- UI helpers ---
 
@@ -358,6 +391,8 @@
             
             btn.addEventListener('click', () => {
                 selectUserToChat(id, sid); 
+                // MODIFIED: Close sidebar on mobile after selection
+                if (window.innerWidth < 768) closeSidebar();
             });
             userListElement.appendChild(btn);
         }
@@ -387,6 +422,8 @@
                 renderUserList(); 
                 searchModal.classList.add('hidden');
                 searchInput.value = '';
+                // MODIFIED: Close sidebar on mobile after selection
+                if (window.innerWidth < 768) closeSidebar();
             });
             searchResults.appendChild(btn);
         }
@@ -453,7 +490,6 @@
     // --- Signaling ---
     function connectToSignaling() {
         if (socket) socket.disconnect();
-        // This now connects to the same origin (your Render app)
         socket = io(SIGNALING_SERVER_URL);
 
         socket.on('connect', () => {
@@ -1094,6 +1130,14 @@
 
     recordBtn.addEventListener('click', handleRecordClick);
 
+    // --- ADDED: Mobile UI Listeners ---
+    hamburgerBtn.addEventListener('click', openSidebar);
+    hamburgerBtnPlaceholder.addEventListener('click', openSidebar);
+    closeSidebarBtn.addEventListener('click', closeSidebar);
+    sidebarOverlay.addEventListener('click', closeSidebar);
+    // --- END: Mobile UI Listeners ---
+
+
     // --- LocalStorage history (V5: Only for text) ---
     function getHistoryKey(peerID) { 
         if (!myUserID || !peerID) return null; 
@@ -1160,6 +1204,3 @@
     </script>
 </body>
 </html>
-
-
-
